@@ -1,0 +1,6 @@
+{
+  "name": "Hệ thống Truck-T",
+  "description": "Hệ thống quản lý xe tải, rơ moóc, lốp xe, lịch sử đo sâu gai lốp, nhật ký sửa chữa và kiểm định đăng kiểm toàn diện.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
