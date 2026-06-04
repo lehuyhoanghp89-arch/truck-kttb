@@ -27,6 +27,7 @@ interface InspectionViewProps {
   onEditTruckExpiry: (id: string, nextDate: string) => void;
   onEditTrailerExpiry: (id: string, nextDate: string) => void;
   isDarkMode: boolean;
+  language?: 'vi' | 'en';
 }
 
 export default function InspectionView({
@@ -34,7 +35,8 @@ export default function InspectionView({
   trailers,
   onEditTruckExpiry,
   onEditTrailerExpiry,
-  isDarkMode
+  isDarkMode,
+  language = 'vi'
 }: InspectionViewProps) {
 
   // Search filter options
@@ -105,10 +107,10 @@ export default function InspectionView({
       {/* View Titles */}
       <div>
         <h2 id="inspect_title" className="text-2xl font-black tracking-tight select-none">
-          Kiểm định đăng kiểm
+          {language === 'vi' ? 'Kiểm định đăng kiểm' : 'Vehicle Inspection'}
         </h2>
         <p id="inspect_desc" className="text-xs text-slate-505 font-medium mt-0.5">
-          Theo dõi chu kỳ gia hạn đăng kiểm và kiểm định giao thông bắt buộc tại bãi cảng
+          {language === 'vi' ? 'Theo dõi chu kỳ gia hạn đăng kiểm và kiểm định giao thông bắt buộc tại bãi cảng' : 'Track inspection renewal cycles and mandatory traffic checks at the port'}
         </p>
       </div>
 

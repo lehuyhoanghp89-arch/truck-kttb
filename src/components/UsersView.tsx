@@ -12,9 +12,10 @@ interface UsersViewProps {
   onUpdateUsers: React.Dispatch<React.SetStateAction<User[]>>;
   currentUser: User;
   isDarkMode: boolean;
+  language?: 'vi' | 'en';
 }
 
-export default function UsersView({ usersList, onUpdateUsers, currentUser, isDarkMode }: UsersViewProps) {
+export default function UsersView({ usersList, onUpdateUsers, currentUser, isDarkMode, language = 'vi' }: UsersViewProps) {
   const isAdmin = currentUser.role === 'admin';
   
   // Local state for editing/adding
@@ -144,17 +145,17 @@ export default function UsersView({ usersList, onUpdateUsers, currentUser, isDar
       <div className="flex justify-between items-center select-none border-b pb-4 border-slate-850">
         <div>
           <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
-            <Users className="w-6 h-6 text-indigo-500" /> Quản lý người dùng & Phân quyền
+            <Users className="w-6 h-6 text-indigo-500" /> {language === 'vi' ? 'Quản lý người dùng & Phân quyền' : 'User Management & Permissions'}
           </h2>
           <p className="text-xs text-slate-450 mt-1">
-            Cấp quyền tài khoản, cấu hình vai trò của các thao tác viên hệ thống
+            {language === 'vi' ? 'Cấp quyền tài khoản, cấu hình vai trò của các thao tác viên hệ thống' : 'Grant privileges, configure roles for system operators'}
           </p>
         </div>
         <div className={`px-3 py-1 flex items-center gap-1.5 text-xs font-bold rounded-lg ${
           isAdmin ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-800 text-slate-400'
         }`}>
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Vai trò của bạn: <strong className="uppercase">{currentUser.role}</strong> ({currentUser.permission})</span>
+          <span>{language === 'vi' ? 'Vai trò của bạn' : 'Your role'}: <strong className="uppercase">{currentUser.role}</strong> ({currentUser.permission})</span>
         </div>
       </div>
 

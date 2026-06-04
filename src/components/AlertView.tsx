@@ -28,6 +28,7 @@ interface AlertViewProps {
   onAddRepairLog: (log: Omit<RepairLog, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => void;
   isDarkMode: boolean;
   currentUser: any;
+  language?: 'vi' | 'en';
 }
 
 export default function AlertView({
@@ -39,7 +40,8 @@ export default function AlertView({
   onAddMaintRequest,
   onAddRepairLog,
   isDarkMode,
-  currentUser
+  currentUser,
+  language = 'vi'
 }: AlertViewProps) {
 
   // Visual sub-view tab: 'worn_gai' (Mòn gai <3mm) or 'overdue' (Quá 30 ngày chưa đo)
@@ -136,10 +138,10 @@ export default function AlertView({
       {/* Title */}
       <div>
         <h2 id="alert_title" className="text-2xl font-black tracking-tight flex items-center gap-2">
-          Hệ thống cảnh báo an toàn lốp
+          {language === 'vi' ? 'Hệ thống cảnh báo an toàn lốp' : 'Tire Safety Warning System'}
         </h2>
         <p id="alert_desc" className="text-xs text-slate-550 font-semibold mt-0.5">
-          Tự động phát hiện lốp có nguy cơ hư hỏng và trễ lịch kiểm tra định kỳ xe tải bãi
+          {language === 'vi' ? 'Tự động phát hiện lốp có nguy cơ hư hỏng và trễ lịch kiểm tra định kỳ xe tải bãi' : 'Automatically detect tires at risk of damage and those overdue for regular port vehicle inspection'}
         </p>
       </div>
 

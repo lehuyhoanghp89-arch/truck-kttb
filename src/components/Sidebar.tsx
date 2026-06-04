@@ -93,10 +93,10 @@ export default function Sidebar({
               </div>
               <div className="overflow-hidden">
                 <div className="font-extrabold text-md text-white tracking-tight whitespace-nowrap">
-                  TireTrack
+                  Terminor Tracktor
                 </div>
                 <div className="text-[9px] uppercase tracking-widest font-bold text-slate-500 whitespace-nowrap">
-                  Quản lý lốp xe
+                  quản lý xe Track
                 </div>
               </div>
             </div>

@@ -47,6 +47,7 @@ interface VehicleViewProps {
   onBulkImportTrailers: (importList: Omit<Trailer, 'id' | 'created_date' | 'updated_date' | 'created_by'>[]) => void;
   isDarkMode: boolean;
   currentUser: any;
+  language?: 'vi' | 'en';
 }
 
 export default function VehicleView({
@@ -68,7 +69,8 @@ export default function VehicleView({
   onBulkImportTrucks,
   onBulkImportTrailers,
   isDarkMode,
-  currentUser
+  currentUser,
+  language = 'vi'
 }: VehicleViewProps) {
 
   // Current tab: 'trucks' or 'trailers'
@@ -477,10 +479,10 @@ export default function VehicleView({
       <div id="veh_header_controls" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b pb-4 border-slate-900">
         <div>
           <h2 id="veh_view_title" className="text-2xl font-black tracking-tight flex items-center gap-2">
-            Quản lý xe
+            {language === 'vi' ? 'Quản lý xe' : 'Vehicle Management'}
           </h2>
           <p id="veh_view_desc" className="text-xs text-slate-505 font-medium mt-0.5">
-            Truck · Trailer · Gắn kết phương tiện vận chuyển Port
+            {language === 'vi' ? 'Truck · Trailer · Gắn kết phương tiện vận chuyển Port' : 'Truck · Trailer · Port Transport Logistics'}
           </p>
         </div>
 

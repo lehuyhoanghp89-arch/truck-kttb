@@ -27,6 +27,7 @@ interface TireMeasureViewProps {
   onReplaceTireWithSpare?: (assetId: string, position: string, damagedSeri: string, damageCause: string, replacementSeri: string) => void;
   isDarkMode: boolean;
   currentUser: any;
+  language?: 'vi' | 'en';
 }
 
 export default function TireMeasureView({
@@ -37,7 +38,8 @@ export default function TireMeasureView({
   onAddTireMeasure,
   onReplaceTireWithSpare,
   isDarkMode,
-  currentUser
+  currentUser,
+  language = 'vi'
 }: TireMeasureViewProps) {
 
   // Current sub-view step: 'selection' or 'active_measure'
@@ -235,10 +237,10 @@ export default function TireMeasureView({
         <div id="selection_view_wrapper" className="space-y-6 leading-relaxed">
           <div>
             <h2 id="measure_title" className="text-2xl font-black tracking-tight">
-              Đo lốp
+              {language === 'vi' ? 'Đo lốp' : 'Tire Measurement'}
             </h2>
             <p id="measure_desc" className="text-xs text-slate-505 font-medium mt-0.5">
-              Nhập số liệu đo độ sâu gai lốp định kỳ cho xe và rơ moóc
+              {language === 'vi' ? 'Nhập số liệu đo độ sâu gai lốp định kỳ cho xe và rơ moóc' : 'Enter periodic tire tread depth measurements for trucks and trailers'}
             </p>
           </div>
 

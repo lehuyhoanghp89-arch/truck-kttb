@@ -668,7 +668,7 @@ export default function App() {
               <div className="w-3.5 h-3.5 bg-white rounded-xs rotate-45"></div>
             </div>
             <div>
-              <span className={`font-black text-sm tracking-tight block leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>TireTrack</span>
+              <span className={`font-black text-sm tracking-tight block leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Terminor Tracktor</span>
               <span className="text-[8px] uppercase tracking-widest text-slate-500 block font-bold font-mono mt-0.5">TT-Port</span>
             </div>
           </div>
@@ -801,6 +801,7 @@ export default function App() {
             onBulkImportTrailers={handleBulkImportTrailers}
             isDarkMode={isDarkMode}
             currentUser={currentUser}
+            language={language}
           />
         )}
 
@@ -814,6 +815,7 @@ export default function App() {
             onReplaceTireWithSpare={handleReplaceTireWithSpare}
             isDarkMode={isDarkMode}
             currentUser={currentUser}
+            language={language}
           />
         )}
 
@@ -828,6 +830,7 @@ export default function App() {
             onAddRepairLog={handleAddRepairLog}
             isDarkMode={isDarkMode}
             currentUser={currentUser}
+            language={language}
           />
         )}
 
@@ -838,6 +841,7 @@ export default function App() {
             onEditTruckExpiry={handleEditTruckExpiry}
             onEditTrailerExpiry={handleEditTrailerExpiry}
             isDarkMode={isDarkMode}
+            language={language}
           />
         )}
 
@@ -877,6 +881,7 @@ export default function App() {
             onUpdateUsers={setUsersList}
             currentUser={currentUser}
             isDarkMode={isDarkMode}
+            language={language}
           />
         )}
 
