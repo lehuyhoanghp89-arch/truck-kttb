@@ -41,14 +41,16 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         }
 
         if (data.user) {
+          const emailStr = data.user.email || '';
+          const isAdmin = emailStr.toLowerCase() === 'lehuyhoanghp89@gmail.com' || emailStr.toLowerCase().includes('admin');
           onLoginSuccess({
             id: data.user.id,
-            email: data.user.email || '',
-            full_name: data.user.email?.split('@')[0] || 'User',
-            username: data.user.email?.split('@')[0] || 'user',
+            email: emailStr,
+            full_name: data.user.user_metadata?.full_name || emailStr.split('@')[0] || 'User',
+            username: data.user.user_metadata?.username || emailStr.split('@')[0] || 'user',
             password: '', // Never store password in state
-            role: 'user', // Depending on structure, fetch from a "profiles" table later
-            permission: 'view'
+            role: isAdmin ? 'admin' : 'user',
+            permission: isAdmin ? 'all' : 'view'
           });
           return;
         }

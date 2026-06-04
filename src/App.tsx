@@ -16,6 +16,7 @@ import {
   RepairLog 
 } from './types';
 import { Menu, X, Sun, Moon, LogOut } from 'lucide-react';
+import { supabase, hasSupabaseConfig } from './lib/supabase';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -105,6 +106,45 @@ export default function App() {
     return saved ? JSON.parse(saved) : []; // Empty initially, loaded on interactive measurer
   });
 
+  // Supabase Initial Load
+  useEffect(() => {
+    if (!hasSupabaseConfig || !currentUser) return;
+    
+    const loadData = async () => {
+      try {
+        const [
+          { data: trucksData },
+          { data: trailersData },
+          { data: tiresData },
+          { data: tireLatestData },
+          { data: maintReqData },
+          { data: logsData },
+          { data: measuresData }
+        ] = await Promise.all([
+          supabase.from('trucks').select('*').order('created_date', { ascending: false }),
+          supabase.from('trailers').select('*').order('created_date', { ascending: false }),
+          supabase.from('tires').select('*').order('created_date', { ascending: false }),
+          supabase.from('tire_latest').select('*').order('last_updated', { ascending: false }),
+          supabase.from('maint_requests').select('*').order('created_date', { ascending: false }),
+          supabase.from('repair_logs').select('*').order('created_date', { ascending: false }),
+          supabase.from('tire_measures').select('*').order('measured_at', { ascending: false })
+        ]);
+
+        if (trucksData) setTrucks(trucksData as Truck[]);
+        if (trailersData) setTrailers(trailersData as Trailer[]);
+        if (tiresData) setTires(tiresData as Tire[]);
+        if (tireLatestData) setTireLatest(tireLatestData as TireLatest[]);
+        if (maintReqData) setMaintRequests(maintReqData as MaintRequest[]);
+        if (logsData) setRepairLogs(logsData as RepairLog[]);
+        if (measuresData) setTireMeasures(measuresData as TireMeasure[]);
+      } catch (err) {
+        console.error('Lỗi khi tải dữ liệu từ Supabase:', err);
+      }
+    };
+
+    loadData();
+  }, [currentUser]);
+
   // Sync data entities list back to localStorage automatically whenever state alters
   useEffect(() => {
     localStorage.setItem('tt_trucks', JSON.stringify(trucks));
@@ -171,14 +211,20 @@ export default function App() {
       created_by: currentUser?.full_name || 'System Admin'
     };
     setTrucks(prev => [item, ...prev]);
+    if (hasSupabaseConfig) supabase.from('trucks').insert([item]).then();
   };
 
   const handleEditTruck = (id: string, updated: Partial<Truck>) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
+    if (hasSupabaseConfig) {
+      const truckToUpdate = trucks.find(t => t.id === id);
+      if (truckToUpdate) supabase.from('trucks').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then();
+    }
   };
 
   const handleDeleteTruck = (id: string) => {
     setTrucks(prev => prev.filter(t => t.id !== id));
+    if (hasSupabaseConfig) supabase.from('trucks').delete().eq('id', id).then();
   };
 
   const handleAddTrailer = (newTrailer: Omit<Trailer, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
@@ -190,14 +236,20 @@ export default function App() {
       created_by: currentUser?.full_name || 'System Admin'
     };
     setTrailers(prev => [item, ...prev]);
+    if (hasSupabaseConfig) supabase.from('trailers').insert([item]).then();
   };
 
   const handleEditTrailer = (id: string, updated: Partial<Trailer>) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
+    if (hasSupabaseConfig) {
+      const trailerToUpdate = trailers.find(t => t.id === id);
+      if (trailerToUpdate) supabase.from('trailers').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then();
+    }
   };
 
   const handleDeleteTrailer = (id: string) => {
     setTrailers(prev => prev.filter(t => t.id !== id));
+    if (hasSupabaseConfig) supabase.from('trailers').delete().eq('id', id).then();
   };
 
   // Linking Trucks & Trailers Gắn Rơ Moóc logic (Image 6 slider panel mechanics)
@@ -206,6 +258,11 @@ export default function App() {
     setTrucks(prev => prev.map(t => t.truck_id === truckId ? { ...t, attached_trailer_id: trailerId } : t));
     // 2. Cross reference on Trailers array (status transfers to ACTIVE)
     setTrailers(prev => prev.map(t => t.trailer_id === trailerId ? { ...t, attached_truck_id: truckId, status: 'ACTIVE' } : t));
+
+    if (hasSupabaseConfig) {
+      supabase.from('trucks').update({ attached_trailer_id: trailerId }).eq('truck_id', truckId).then();
+      supabase.from('trailers').update({ attached_truck_id: truckId, status: 'ACTIVE' }).eq('trailer_id', trailerId).then();
+    }
   };
 
   const handleDetachTrailer = (truckId: string) => {
@@ -217,6 +274,11 @@ export default function App() {
       setTrucks(prev => prev.map(t => t.truck_id === truckId ? { ...t, attached_trailer_id: null } : t));
       // Clear link on Trailer, resetting to SPARE (dự phòng sẵn sàng)
       setTrailers(prev => prev.map(t => t.trailer_id === trailerId ? { ...t, attached_truck_id: null, status: 'SPARE' } : t));
+
+      if (hasSupabaseConfig) {
+        supabase.from('trucks').update({ attached_trailer_id: null }).eq('truck_id', truckId).then();
+        supabase.from('trailers').update({ attached_truck_id: null, status: 'SPARE' }).eq('trailer_id', trailerId).then();
+      }
     }
   };
 
@@ -230,6 +292,7 @@ export default function App() {
       created_by: currentUser?.full_name || 'System Auto'
     };
     setRepairLogs(prev => [entry, ...prev]);
+    if (hasSupabaseConfig) supabase.from('repair_logs').insert([entry]).then();
   };
 
   // Approving Awaiting Requests (Duyệt yêu cầu thay lốp, đảo lốp tại Dashboard)
@@ -300,21 +363,25 @@ export default function App() {
 
     // Set status to DONE
     setMaintRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'DONE', updated_date: new Date().toISOString() } : r));
+    if (hasSupabaseConfig) supabase.from('maint_requests').update({ status: 'DONE', updated_date: new Date().toISOString() }).eq('id', id).then();
     alert('Đã DUYỆT yêu cầu vận hành xe thành công. Các chỉ số vỏ lốp trên xe và tồn kho đã được sắp đặt tự động.');
   };
 
   const handleActionRejectRequest = (id: string) => {
     setMaintRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED', updated_date: new Date().toISOString() } : r));
+    if (hasSupabaseConfig) supabase.from('maint_requests').update({ status: 'REJECTED', updated_date: new Date().toISOString() }).eq('id', id).then();
     alert('Đã từ chối phiếu yêu cầu kỹ thuật.');
   };
 
   // Adjust Expiry Date calendar registry triggers (Kiểm định)
   const handleEditTruckExpiry = (id: string, targetDate: string) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
+    if (hasSupabaseConfig) supabase.from('trucks').update({ inspection_expiry: targetDate }).eq('id', id).then();
   };
 
   const handleEditTrailerExpiry = (id: string, targetDate: string) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
+    if (hasSupabaseConfig) supabase.from('trailers').update({ inspection_expiry: targetDate }).eq('id', id).then();
   };
 
   // Bulk uploads from CSV files
