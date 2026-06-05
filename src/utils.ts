@@ -6,15 +6,29 @@
 // Helper to parse simple CSV file (supports Vietnamese characters and header normalization)
 export function parseCsv(csvText: string): string[][] {
   const lines: string[][] = [];
-  const rawLines = csvText.trim().split(/\r?\n/);
+  const rawLines = csvText.split(/\r?\n/);
   
   for (const rawLine of rawLines) {
-    if (!rawLine.trim()) continue;
-    // Simple split by comma but respecting quoted fields is nice; standard split for demo is reliable
-    // Splitting by commas that are not inside quotes
-    const matches = rawLine.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || rawLine.split(',');
-    const cleanFields = (matches || []).map(f => f.replace(/^"|"$/g, '').trim());
-    lines.push(cleanFields);
+    const trimmed = rawLine.trim();
+    if (!trimmed) continue;
+    
+    const row: string[] = [];
+    let insideQuote = false;
+    let currentField = '';
+    
+    for (let i = 0; i < rawLine.length; i++) {
+      const char = rawLine[i];
+      if (char === '"') {
+        insideQuote = !insideQuote;
+      } else if (char === ',' && !insideQuote) {
+        row.push(currentField.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+        currentField = '';
+      } else {
+        currentField += char;
+      }
+    }
+    row.push(currentField.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+    lines.push(row);
   }
   
   return lines;

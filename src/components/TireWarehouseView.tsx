@@ -182,37 +182,46 @@ export default function TireWarehouseView({
     }
     return ['Bridgestone', 'Michelin', 'Casumina', 'Maxxis', 'Yokohama'];
   });
+
+  // Calculate unique brands present in Supabase tires + our configurable checklist
+  const dbBrands = Array.from(new Set(tires.map(t => t.brand).filter(Boolean)));
+  const allAvailableBrands = Array.from(new Set([...brands, ...dbBrands])).sort();
   
   const [newBrand, setNewBrand] = useState(() => {
-    const saved = localStorage.getItem('tire_brands_list');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
-      } catch (e) {}
-    }
-    return 'Bridgestone';
+    return allAvailableBrands[0] || 'Bridgestone';
   });
 
   const [isManagingBrands, setIsManagingBrands] = useState(false);
   const [customBrandName, setCustomBrandName] = useState('');
 
   const handleDeleteBrand = (brandToDelete: string) => {
-    const updated = brands.filter(b => b !== brandToDelete);
+    // Check if brand is physically being used currently in any tyre loaded from database
+    const isCurrentlyUsed = tires.some(t => t.brand?.toLowerCase() === brandToDelete.toLowerCase());
+    if (isCurrentlyUsed) {
+      alert(language === 'vi' 
+        ? `Thương hiệu "${brandToDelete}" đang được sử dụng bởi lốp xe trong hệ thống, không thể xóa bỏ!` 
+        : `Brand "${brandToDelete}" is currently in use by some tires and cannot be deleted!`
+      );
+      return;
+    }
+
+    const updated = brands.filter(b => b.toLowerCase() !== brandToDelete.toLowerCase());
     setBrands(updated);
     localStorage.setItem('tire_brands_list', JSON.stringify(updated));
-    if (newBrand === brandToDelete) {
-      setNewBrand(updated[0] || '');
+    if (newBrand.toLowerCase() === brandToDelete.toLowerCase()) {
+      const remaining = allAvailableBrands.filter(b => b.toLowerCase() !== brandToDelete.toLowerCase());
+      setNewBrand(remaining[0] || 'Bridgestone');
     }
   };
 
   const handleAddBrand = () => {
     const trimmed = customBrandName.trim();
     if (!trimmed) return;
-    if (brands.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
+    if (allAvailableBrands.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
       alert(language === 'vi' ? 'Hãng này đã có trong danh sách!' : 'Brand already exists!');
       return;
     }
+    
     const updated = [...brands, trimmed];
     setBrands(updated);
     localStorage.setItem('tire_brands_list', JSON.stringify(updated));
@@ -445,7 +454,7 @@ export default function TireWarehouseView({
                         </button>
                       </div>
                       <div className="max-h-20 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
-                        {brands.map(b => (
+                        {allAvailableBrands.map(b => (
                           <div key={b} className="flex items-center justify-between text-[10px] py-0.5 px-1 bg-slate-900/50 border border-slate-800 rounded">
                             <span className="truncate text-slate-300 font-medium">{b}</span>
                             <button
@@ -469,7 +478,7 @@ export default function TireWarehouseView({
                           : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-500 font-bold'
                       }`}
                     >
-                      {brands.map(b => (
+                      {allAvailableBrands.map(b => (
                         <option key={b} value={b}>{b}</option>
                       ))}
                     </select>
