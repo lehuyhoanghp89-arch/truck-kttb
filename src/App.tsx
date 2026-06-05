@@ -422,14 +422,14 @@ export default function App() {
   };
 
   const handleDeleteTruck = (id: string) => {
-    // Check if the truck being deleted is attached to a trailer
+    // Check if the truck being deleted is attached to any trailer or references
     const truckToDelete = trucks.find(t => t.id === id);
-    if (truckToDelete && truckToDelete.attached_trailer_id) {
-      const attachedTrailerId = truckToDelete.attached_trailer_id;
-      // Reset the linked trailer
-      setTrailers(prev => prev.map(t => t.trailer_id === attachedTrailerId ? { ...t, attached_truck_id: '', status: 'SPARE' } : t));
+    if (truckToDelete) {
+      const deletedTruckId = truckToDelete.truck_id;
+      // Reset any linked trailer
+      setTrailers(prev => prev.map(t => t.attached_truck_id === deletedTruckId ? { ...t, attached_truck_id: null, status: 'SPARE' } : t));
       if (hasSupabaseConfig) {
-        supabase.from('trailers').update({ attached_truck_id: null, status: 'SPARE' }).eq('trailer_id', attachedTrailerId).then(({ error }) => {
+        supabase.from('trailers').update({ attached_truck_id: null, status: 'SPARE' }).eq('attached_truck_id', deletedTruckId).then(({ error }) => {
           if (error) console.error("Lỗi gỡ xe tải khỏi rơ moóc khi xóa xe tải:", error);
         });
       }
@@ -520,14 +520,14 @@ export default function App() {
   };
 
   const handleDeleteTrailer = (id: string) => {
-    // Check if the trailer being deleted is attached to a truck
+    // Check if the trailer being deleted is attached to any truck or references
     const trailerToDelete = trailers.find(t => t.id === id);
-    if (trailerToDelete && trailerToDelete.attached_truck_id) {
-      const attachedTruckId = trailerToDelete.attached_truck_id;
-      // Reset the linked truck
-      setTrucks(prev => prev.map(t => t.truck_id === attachedTruckId ? { ...t, attached_trailer_id: '' } : t));
+    if (trailerToDelete) {
+      const deletedTrailerId = trailerToDelete.trailer_id;
+      // Reset any linked truck
+      setTrucks(prev => prev.map(t => t.attached_trailer_id === deletedTrailerId ? { ...t, attached_trailer_id: null } : t));
       if (hasSupabaseConfig) {
-        supabase.from('trucks').update({ attached_trailer_id: null }).eq('truck_id', attachedTruckId).then(({ error }) => {
+        supabase.from('trucks').update({ attached_trailer_id: null }).eq('attached_trailer_id', deletedTrailerId).then(({ error }) => {
           if (error) console.error("Lỗi gỡ moóc khỏi xe tải khi xóa moóc:", error);
         });
       }

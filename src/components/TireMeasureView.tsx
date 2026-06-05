@@ -25,6 +25,8 @@ interface TireMeasureViewProps {
   tireLatest: TireLatest[];
   onAddTireMeasure: (measure: Omit<TireMeasure, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => void;
   onReplaceTireWithSpare?: (assetId: string, position: string, damagedSeri: string, damageCause: string, replacementSeri: string) => void;
+  onMountTireToVehicle?: (serial: string, assetId: string, position: string) => void;
+  onUnmountTireFromVehicle?: (serial: string) => void;
   isDarkMode: boolean;
   currentUser: any;
   language?: 'vi' | 'en';
@@ -37,6 +39,8 @@ export default function TireMeasureView({
   tireLatest,
   onAddTireMeasure,
   onReplaceTireWithSpare,
+  onMountTireToVehicle,
+  onUnmountTireFromVehicle,
   isDarkMode,
   currentUser,
   language = 'vi'
@@ -56,9 +60,12 @@ export default function TireMeasureView({
   // Input results sidebar drawer states
   const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
   const [depthInput, setDepthInput] = useState('');
-  const [measuredAt, setMeasuredAt] = useState('2026-05-31');
+  const [measuredAt, setMeasuredAt] = useState('2026-06-05');
   const [measureNotes, setMeasureNotes] = useState('');
   const [errInput, setErrInput] = useState('');
+
+  // Local state for selecting spare tire to mount
+  const [mountSpareSeri, setMountSpareSeri] = useState('');
 
   // Damaged tyre report state variables
   const [isDamagedChecked, setIsDamagedChecked] = useState(false);
@@ -88,9 +95,10 @@ export default function TireMeasureView({
     
     setSelectedPosition(position);
     setDepthInput(currentTyre ? String(currentTyre.depth_mm) : '5.5');
-    setMeasuredAt('2026-06-03');
+    setMeasuredAt(new Date().toISOString().split('T')[0]);
     setMeasureNotes('');
     setErrInput('');
+    setMountSpareSeri('');
 
     // Reset damaged states
     setIsDamagedChecked(false);

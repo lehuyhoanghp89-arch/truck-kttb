@@ -327,19 +327,35 @@ export default function VehicleView({
 
   // CSV Import / Export Handler
   const downloadSampleCsv = () => {
-    const truckHeaders = [
-      { key: 'truck_id', label: 'truck_id (Mã xe)' },
-      { key: 'license_plate', label: 'license_plate (Biển số)' },
-      { key: 'model', label: 'model (Model xe)' },
-      { key: 'status', label: 'status (Trạng thái ACTIVE/MAINTENANCE/INACTIVE)' },
-      { key: 'inspection_expiry', label: 'inspection_expiry (Đăng kiểm YYYY-MM-DD)' },
-      { key: 'notes', label: 'notes (Ghi chú)' }
-    ];
-    const dummyRow = [
-      { truck_id: 'TT99', license_plate: '51C-999.99', model: 'Howo A7', status: 'ACTIVE', inspection_expiry: '2026-12-31', notes: 'Lái xe Nguyễn Văn An' }
-    ];
-    const csvContent = exportToCsv(dummyRow, truckHeaders);
-    triggerCsvDownload(csvContent, 'Bản_Mẫu_Nhập_Xe_Tải.csv');
+    if (activeTab === 'trucks') {
+      const truckHeaders = [
+        { key: 'truck_id', label: 'truck_id (Mã xe)' },
+        { key: 'license_plate', label: 'license_plate (Biển số)' },
+        { key: 'model', label: 'model (Model xe - Có thể để trống)' },
+        { key: 'status', label: 'status (Trạng thái ACTIVE/MAINTENANCE/INACTIVE)' },
+        { key: 'inspection_expiry', label: 'inspection_expiry (Đăng kiểm YYYY-MM-DD - Có thể để trống)' },
+        { key: 'notes', label: 'notes (Ghi chú - Có thể để trống)' }
+      ];
+      const dummyRow = [
+        { truck_id: 'TT99', license_plate: '51C-999.99', model: 'Howo A7', status: 'ACTIVE', inspection_expiry: '2026-12-31', notes: 'Lái xe Nguyễn Văn An' }
+      ];
+      const csvContent = exportToCsv(dummyRow, truckHeaders);
+      triggerCsvDownload(csvContent, 'Bản_Mẫu_Nhập_Xe_Tải.csv');
+    } else {
+      const trailerHeaders = [
+        { key: 'trailer_id', label: 'trailer_id (Mã moóc)' },
+        { key: 'license_plate', label: 'license_plate (Biển số)' },
+        { key: 'model', label: 'model (Model moóc - Có thể để trống)' },
+        { key: 'status', label: 'status (Trạng thái ACTIVE/SPARE/MAINTENANCE/INACTIVE)' },
+        { key: 'inspection_expiry', label: 'inspection_expiry (Đăng kiểm YYYY-MM-DD - Có thể để trống)' },
+        { key: 'notes', label: 'notes (Ghi chú - Có thể để trống)' }
+      ];
+      const dummyRow = [
+        { trailer_id: 'RM99', license_plate: '51R-999.99', model: 'Cimc 40ft', status: 'SPARE', inspection_expiry: '', notes: 'Rơ moóc xương' }
+      ];
+      const csvContent = exportToCsv(dummyRow, trailerHeaders);
+      triggerCsvDownload(csvContent, 'Bản_Mẫu_Nhập_Ro_Mooc.csv');
+    }
   };
 
   const exportCurrentDataset = () => {
@@ -384,56 +400,80 @@ export default function VehicleView({
           return;
         }
 
-        const headers = parsed[0].map(h => h.trim().toLowerCase());
+        const rawHeaders = parsed[0].map(h => h.trim().toLowerCase());
+        const headers: string[] = [];
+        
+        rawHeaders.forEach(h => {
+          let cleanStr = h.split('(')[0].trim();
+          if (cleanStr.includes('truck_id') || cleanStr.includes('mã xe')) cleanStr = 'truck_id';
+          else if (cleanStr.includes('trailer_id') || cleanStr.includes('mã moóc') || cleanStr.includes('mã moọc')) cleanStr = 'trailer_id';
+          else if (cleanStr.includes('license_plate') || cleanStr.includes('biển số') || cleanStr.includes('biển kiểm soát')) cleanStr = 'license_plate';
+          else if (cleanStr.includes('model') || cleanStr.includes('kiểu')) cleanStr = 'model';
+          else if (cleanStr.includes('status') || cleanStr.includes('trạng thái')) cleanStr = 'status';
+          else if (cleanStr.includes('inspection_expiry') || cleanStr.includes('hạn đăng kiểm') || cleanStr.includes('đăng kiểm')) cleanStr = 'inspection_expiry';
+          else if (cleanStr.includes('notes') || cleanStr.includes('ghi chú')) cleanStr = 'notes';
+          headers.push(cleanStr);
+        });
+
         const importedDataList: any[] = [];
 
         for (let i = 1; i < parsed.length; i++) {
           const row = parsed[i];
-          if (row.length < headers.length) continue;
+          if (row.length === 0 || (row.length === 1 && !row[0].trim())) continue;
           
           const obj: any = {};
           headers.forEach((h, idx) => {
-            // Clean Vietnamese brackets if written in headers (e.g. "truck_id (mã xe)" matches "truck_id")
-            let cleanedHeader = h.split('(')[0].trim();
-            obj[cleanedHeader] = row[idx];
+            obj[h] = row[idx] !== undefined ? row[idx].trim() : '';
           });
           importedDataList.push(obj);
+        }
+
+        if (importedDataList.length === 0) {
+          alert('Không tìm thấy dòng dữ liệu nào hợp lệ trong file CSV!');
+          return;
         }
 
         // Apply bulk uploads
         if (activeTab === 'trucks') {
           // Normalize status
-          const cleanList = importedDataList.map((item, index) => ({
-            truck_id: item.truck_id || `TT-NEW-${index}`,
-            license_plate: item.license_plate || 'Chưa gắn',
-            model: item.model || 'Hyundai',
-            status: item.status && ['ACTIVE', 'MAINTENANCE', 'INACTIVE'].includes(item.status.toUpperCase()) 
-              ? item.status.toUpperCase() as any 
-              : 'ACTIVE',
-            attached_trailer_id: null,
-            notes: item.notes || '',
-            inspection_expiry: item.inspection_expiry || '',
-            inspection_notes: ''
-          }));
+          const cleanList = importedDataList.map((item, index) => {
+            const truck_id = item.truck_id || item.trailer_id || `TT-NEW-${index + 1}`;
+            return {
+              truck_id: truck_id,
+              license_plate: item.license_plate || 'Chưa gắn',
+              model: item.model || '',
+              status: item.status && ['ACTIVE', 'MAINTENANCE', 'INACTIVE'].includes(item.status.toUpperCase()) 
+                ? item.status.toUpperCase() as any 
+                : 'ACTIVE',
+              attached_trailer_id: null,
+              notes: item.notes || '',
+              inspection_expiry: item.inspection_expiry || '',
+              inspection_notes: ''
+            };
+          });
           onBulkImportTrucks(cleanList);
           alert(`Đã nhập dữ liệu hàng loạt thành công ${cleanList.length} xe tải vào hệ thống.`);
         } else {
-          const cleanList = importedDataList.map((item, index) => ({
-            trailer_id: item.trailer_id || `RM-NEW-${index}`,
-            license_plate: item.license_plate || 'Chưa gắn',
-            model: item.model || 'Cimc',
-            status: item.status && ['ACTIVE', 'SPARE', 'MAINTENANCE', 'INACTIVE'].includes(item.status.toUpperCase()) 
-              ? item.status.toUpperCase() as any 
-              : 'SPARE',
-            attached_truck_id: null,
-            notes: item.notes || '',
-            inspection_expiry: item.inspection_expiry || '',
-            inspection_notes: ''
-          }));
+          const cleanList = importedDataList.map((item, index) => {
+            const trailer_id = item.trailer_id || item.truck_id || `RM-NEW-${index + 1}`;
+            return {
+              trailer_id: trailer_id,
+              license_plate: item.license_plate || 'Chưa gắn',
+              model: item.model || '',
+              status: item.status && ['ACTIVE', 'SPARE', 'MAINTENANCE', 'INACTIVE'].includes(item.status.toUpperCase()) 
+                ? item.status.toUpperCase() as any 
+                : 'SPARE',
+              attached_truck_id: null,
+              notes: item.notes || '',
+              inspection_expiry: item.inspection_expiry || '',
+              inspection_notes: ''
+            };
+          });
           onBulkImportTrailers(cleanList);
           alert(`Đã nhập dữ liệu hàng loạt thành công ${cleanList.length} rơ moóc vào hệ thống.`);
         }
       } catch (err) {
+        console.error('Lỗi phân tích cú pháp CSV tải lên:', err);
         alert('Lỗi xử lý file CSV. Vui lòng định dạng chuẩn Unicode UTF-8.');
       }
     };
