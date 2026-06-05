@@ -121,6 +121,10 @@ export default function App() {
   const [maintRequestsTable, setMaintRequestsTable] = useState<'maint_requests' | 'main_requests'>('maint_requests');
   const [tireLatestTable, setTireLatestTable] = useState<'tire_latest' | 'tire_lastest'>('tire_latest');
 
+  // Dynamic table column caches for self-healing inserts and updates
+  const [trucksColumns, setTrucksColumns] = useState<string[] | null>(null);
+  const [trailersColumns, setTrailersColumns] = useState<string[] | null>(null);
+
   // Supabase Initial Load
   useEffect(() => {
     if (!hasSupabaseConfig || !currentUser) return;
@@ -149,6 +153,9 @@ export default function App() {
         } else if (trucksData) {
           console.log(`Đã đồng bộ thành công ${trucksData.length} xe trucks.`);
           setTrucks(trucksData as Truck[]);
+          if (trucksData.length > 0) {
+            setTrucksColumns(Object.keys(trucksData[0]));
+          }
         }
 
         if (trailersError) {
@@ -156,6 +163,9 @@ export default function App() {
         } else if (trailersData) {
           console.log(`Đã đồng bộ thành công ${trailersData.length} moóc trailers.`);
           setTrailers(trailersData as Trailer[]);
+          if (trailersData.length > 0) {
+            setTrailersColumns(Object.keys(trailersData[0]));
+          }
         }
 
         if (tiresError) {
@@ -301,9 +311,41 @@ export default function App() {
     };
     setTrucks(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('trucks').insert([item]).then(({ error }) => {
-        if (error) console.error("Lỗi thêm xe trucks vào Supabase:", error);
-        else console.log("Đã thêm xe trucks thành công.");
+      // Safe insert with dynamic column matching
+      let payload: any = { ...item };
+      if (trucksColumns && trucksColumns.length > 0) {
+        const filteredPayload: any = {};
+        Object.keys(payload).forEach(key => {
+          if (trucksColumns.includes(key)) {
+            filteredPayload[key] = payload[key];
+          }
+        });
+        payload = filteredPayload;
+      }
+      supabase.from('trucks').insert([payload]).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi thêm xe trucks vào Supabase:", error);
+          // Auto remediate column errors
+          if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+            const match = error.message.match(/column "(.*?)"/);
+            if (match && match[1]) {
+              const badCol = match[1];
+              console.warn(`Bỏ cột "${badCol}" và thử lại thêm xe...`);
+              delete payload[badCol];
+              supabase.from('trucks').insert([payload]).then(({ error: retryErr }) => {
+                if (retryErr) {
+                  alert(`Lỗi lưu xe vào Supabase: ${retryErr.message}\nChi tiết: ${retryErr.details || 'Kiểm tra phân quyền RLS.'}`);
+                } else {
+                  console.log("Đã thêm xe trucks thành công sau khi bỏ cột.");
+                }
+              });
+              return;
+            }
+          }
+          alert(`Lỗi khi lưu xe tải mới lên database Supabase:\n\n${error.message}\n\nChi tiết: ${error.details || 'Có thể do bảng "trucks" thiếu một số cột hoặc bị RLS chặn.'}`);
+        } else {
+          console.log("Đã thêm xe trucks thành công.");
+        }
       });
     }
   };
@@ -311,8 +353,30 @@ export default function App() {
   const handleEditTruck = (id: string, updated: Partial<Truck>) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      supabase.from('trucks').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
-        if (error) console.error("Lỗi cập nhật xe trucks trên Supabase:", error);
+      let payload: any = { ...updated, updated_date: new Date().toISOString() };
+      if (trucksColumns && trucksColumns.length > 0) {
+        const filteredPayload: any = {};
+        Object.keys(payload).forEach(key => {
+          if (trucksColumns.includes(key)) {
+            filteredPayload[key] = payload[key];
+          }
+        });
+        payload = filteredPayload;
+      }
+      supabase.from('trucks').update(payload).eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi cập nhật xe trucks trên Supabase:", error);
+          if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+            const match = error.message.match(/column "(.*?)"/);
+            if (match && match[1]) {
+              const badCol = match[1];
+              delete payload[badCol];
+              supabase.from('trucks').update(payload).eq('id', id).then();
+              return;
+            }
+          }
+          alert(`Lỗi cập nhật xe trên Supabase: ${error.message}`);
+        }
       });
     }
   };
@@ -321,7 +385,10 @@ export default function App() {
     setTrucks(prev => prev.filter(t => t.id !== id));
     if (hasSupabaseConfig) {
       supabase.from('trucks').delete().eq('id', id).then(({ error }) => {
-        if (error) console.error("Lỗi xóa xe trucks khỏi Supabase:", error);
+        if (error) {
+          console.error("Lỗi xóa xe trucks khỏi Supabase:", error);
+          alert(`Lỗi xóa xe trên Supabase: ${error.message}`);
+        }
       });
     }
   };
@@ -336,9 +403,34 @@ export default function App() {
     };
     setTrailers(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('trailers').insert([item]).then(({ error }) => {
-        if (error) console.error("Lỗi thêm moóc trailers vào Supabase:", error);
-        else console.log("Đã thêm moóc trailers thành công.");
+      let payload: any = { ...item };
+      if (trailersColumns && trailersColumns.length > 0) {
+        const filteredPayload: any = {};
+        Object.keys(payload).forEach(key => {
+          if (trailersColumns.includes(key)) {
+            filteredPayload[key] = payload[key];
+          }
+        });
+        payload = filteredPayload;
+      }
+      supabase.from('trailers').insert([payload]).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi thêm moóc trailers vào Supabase:", error);
+          if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+            const match = error.message.match(/column "(.*?)"/);
+            if (match && match[1]) {
+              const badCol = match[1];
+              delete payload[badCol];
+              supabase.from('trailers').insert([payload]).then(({ error: retryErr }) => {
+                if (retryErr) alert(`Lỗi lưu rơ moóc: ${retryErr.message}`);
+              });
+              return;
+            }
+          }
+          alert(`Lỗi lưu rơ moóc mới vào Supabase:\n\n${error.message}\n\nChi tiết: ${error.details || 'Kiểm tra phân quyền RLS.'}`);
+        } else {
+          console.log("Đã thêm moóc trailers thành công.");
+        }
       });
     }
   };
@@ -346,8 +438,30 @@ export default function App() {
   const handleEditTrailer = (id: string, updated: Partial<Trailer>) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      supabase.from('trailers').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
-        if (error) console.error("Lỗi cập nhật trailers trên Supabase:", error);
+      let payload: any = { ...updated, updated_date: new Date().toISOString() };
+      if (trailersColumns && trailersColumns.length > 0) {
+        const filteredPayload: any = {};
+        Object.keys(payload).forEach(key => {
+          if (trailersColumns.includes(key)) {
+            filteredPayload[key] = payload[key];
+          }
+        });
+        payload = filteredPayload;
+      }
+      supabase.from('trailers').update(payload).eq('id', id).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi cập nhật trailers trên Supabase:", error);
+          if (error.message && error.message.includes('column') && error.message.includes('does not exist')) {
+            const match = error.message.match(/column "(.*?)"/);
+            if (match && match[1]) {
+              const badCol = match[1];
+              delete payload[badCol];
+              supabase.from('trailers').update(payload).eq('id', id).then();
+              return;
+            }
+          }
+          alert(`Lỗi cập nhật rơ moóc trên Supabase: ${error.message}`);
+        }
       });
     }
   };
@@ -571,8 +685,24 @@ export default function App() {
     }));
     setTrucks(prev => [...list, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('trucks').insert(list).then(({ error }) => {
-        if (error) console.error("Lỗi khi import xe trucks:", error);
+      const payloadList = list.map(item => {
+        let payload: any = { ...item };
+        if (trucksColumns && trucksColumns.length > 0) {
+          const filtered: any = {};
+          Object.keys(payload).forEach(key => {
+            if (trucksColumns.includes(key)) {
+              filtered[key] = payload[key];
+            }
+          });
+          payload = filtered;
+        }
+        return payload;
+      });
+      supabase.from('trucks').insert(payloadList).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi khi import xe trucks:", error);
+          alert(`Lỗi khi tải lên danh sách xe từ CSV: ${error.message}`);
+        }
       });
     }
   };
@@ -587,8 +717,24 @@ export default function App() {
     }));
     setTrailers(prev => [...list, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('trailers').insert(list).then(({ error }) => {
-        if (error) console.error("Lỗi khi import moóc trailers:", error);
+      const payloadList = list.map(item => {
+        let payload: any = { ...item };
+        if (trailersColumns && trailersColumns.length > 0) {
+          const filtered: any = {};
+          Object.keys(payload).forEach(key => {
+            if (trailersColumns.includes(key)) {
+              filtered[key] = payload[key];
+            }
+          });
+          payload = filtered;
+        }
+        return payload;
+      });
+      supabase.from('trailers').insert(payloadList).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi khi import moóc trailers:", error);
+          alert(`Lỗi khi tải lên danh sách rơ moóc từ CSV: ${error.message}`);
+        }
       });
     }
   };
@@ -857,21 +1003,23 @@ export default function App() {
 
     // 4) Auto append Completed Maintenance Ticket
     const ticketId = generateUUID();
-    const repairTicket = {
-      asset_id: assetId,
-      asset_type: assetId.startsWith('RM') ? 'TRAILER' : 'TRUCK' as 'TRAILER' | 'TRUCK',
-      type: 'TIRE_SWAP' as const,
-      description: `Thay thế lốp hỏng ${damagedSeri} ở vị trí ${position} (Nguyên nhân: ${damageCause}) bằng lốp dự phòng ${replacementSeri}.`,
-      status: 'COMPLETED' as const,
-      notes: 'Đã hoàn thành tự động đồng bộ.'
-    };
-    
     const newMaint: MaintRequest = {
-      ...repairTicket,
       id: ticketId,
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
-      created_by: currentUser?.full_name || 'Huy Thợ Lốp'
+      created_by: currentUser?.full_name || 'Huy Thợ Lốp',
+      request_type: 'REPLACE',
+      asset_id: assetId,
+      asset_type: assetId.startsWith('RM') ? 'TRAILER' : 'TRUCK',
+      position: position,
+      old_tire_seri: damagedSeri,
+      new_tire_seri: replacementSeri,
+      reason: damageCause,
+      status: 'DONE',
+      requested_by: currentUser?.full_name || 'Huy Thợ Lốp',
+      approved_by: currentUser?.full_name || 'Huy Thợ Lốp',
+      approved_at: new Date().toISOString(),
+      notes: `Tự động tháo lốp hỏng ${damagedSeri} thay bằng lốp dự phòng ${replacementSeri}.`
     };
 
     setMaintRequests(prev => [newMaint, ...prev]);
