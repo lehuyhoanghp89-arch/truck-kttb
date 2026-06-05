@@ -489,7 +489,7 @@ export default function VehicleView({
       t.license_plate.toLowerCase().includes(query) ||
       t.model.toLowerCase().includes(query)
     );
-  });
+  }).sort((a, b) => a.truck_id.localeCompare(b.truck_id, undefined, { numeric: true, sensitivity: 'base' }));
 
   const filteredTrailers = trailers.filter(t => {
     const query = searchQuery.trim().toLowerCase();
@@ -507,7 +507,7 @@ export default function VehicleView({
       t.license_plate.toLowerCase().includes(query) ||
       t.model.toLowerCase().includes(query)
     );
-  });
+  }).sort((a, b) => a.trailer_id.localeCompare(b.trailer_id, undefined, { numeric: true, sensitivity: 'base' }));
 
   // Fetch spare list of trailers
   const spareTrailers = trailers.filter(t => t.status === 'SPARE');
@@ -998,18 +998,18 @@ export default function VehicleView({
 
                       <div className="w-full flex justify-center py-1.5 bg-emerald-600/5 border border-emerald-500/15 rounded-xl text-xs font-bold text-emerald-400">Trục A (Trước)</div>
                       <div id="trailer_diagram_axle_a" className="grid grid-cols-4 gap-2">
-                        {renderTyreCell('A_OL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_OL'))}
-                        {renderTyreCell('A_IL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_IL'))}
-                        {renderTyreCell('A_IR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_IR'))}
-                        {renderTyreCell('A_OR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_OR'))}
+                        {renderTyreCell('OFL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_OL'))}
+                        {renderTyreCell('IFL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_IL'))}
+                        {renderTyreCell('IFR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_IR'))}
+                        {renderTyreCell('OFR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'A_OR'))}
                       </div>
 
                       <div className="w-full flex justify-center py-1.5 bg-emerald-600/5 border border-emerald-500/15 rounded-xl text-xs font-bold text-emerald-400">Trục B (Sau)</div>
                       <div id="trailer_diagram_axle_b" className="grid grid-cols-4 gap-2">
-                        {renderTyreCell('B_OL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_OL'))}
-                        {renderTyreCell('B_IL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_IL'))}
-                        {renderTyreCell('B_IR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_IR'))}
-                        {renderTyreCell('B_OR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_OR'))}
+                        {renderTyreCell('ORL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_OL'))}
+                        {renderTyreCell('IRL', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_IL'))}
+                        {renderTyreCell('IRR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_IR'))}
+                        {renderTyreCell('ORR', tireLatest.find(t => t.asset_id === selectedAssetId && t.position === 'B_OR'))}
                       </div>
 
                       <div className="mt-4 p-4 rounded-xl border border-dashed border-slate-800 text-xs leading-relaxed space-y-1 bg-slate-950/20 text-slate-400">

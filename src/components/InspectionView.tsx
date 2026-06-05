@@ -67,7 +67,7 @@ export default function InspectionView({
       inspection_expiry: t.inspection_expiry,
       status: t.status
     }))
-  ];
+  ].sort((a, b) => a.asset_id.localeCompare(b.asset_id, undefined, { numeric: true, sensitivity: 'base' }));
 
   // Apply visual filtering
   const filteredDataset = unifiedFleet.filter(item => {

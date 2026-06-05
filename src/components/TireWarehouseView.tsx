@@ -775,64 +775,87 @@ export default function TireWarehouseView({
             </div>
 
             <form onSubmit={handleCompleteMounting} className="space-y-4 text-xs font-sans">
-              <div>
-                <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-indigo-500">{language === 'vi' ? 'Chọn xe tải hoặc rơ moóc cần gắn *' : 'Target asset ID *'}</label>
-                <select
-                  required
-                  value={targetAssetId}
-                  onChange={e => setTargetAssetId(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg outline-none ${
-                    isDarkMode ? 'bg-slate-955 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900 font-bold'
-                  }`}
-                >
-                  <option value="">{language === 'vi' ? '-- Chọn xe tải/moóc --' : '-- Select asset --'}</option>
-                  <optgroup label={language === 'vi' ? 'Dàn xe đầu kéo (Truck)' : 'Container Trucks'}>
-                    {trucks.map(tk => (
-                      <option key={tk.id} value={tk.truck_id}>{tk.truck_id} ({tk.license_plate})</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label={language === 'vi' ? 'Dàn Rơ Moóc (Trailer)' : 'Chassis Trailers'}>
-                    {trailers.map(tr => (
-                      <option key={tr.id} value={tr.trailer_id}>{tr.trailer_id} ({tr.license_plate})</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
+              {(() => {
+                const isSelectedTrailer = trailers.some(tr => tr.trailer_id === targetAssetId);
+                return (
+                  <>
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-indigo-500">
+                        {language === 'vi' ? 'Chọn xe tải hoặc rơ moóc cần gắn *' : 'Target asset ID *'}
+                      </label>
+                      <select
+                        required
+                        value={targetAssetId}
+                        onChange={e => setTargetAssetId(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg outline-none cursor-pointer transition-all ${
+                          isDarkMode 
+                            ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                            : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                        }`}
+                      >
+                        <option value="" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                          {language === 'vi' ? '-- Chọn xe tải/moóc --' : '-- Select asset --'}
+                        </option>
+                        <optgroup label={language === 'vi' ? 'Dàn xe đầu kéo (Truck)' : 'Container Trucks'} className={isDarkMode ? 'bg-slate-900 text-slate-400' : ''}>
+                          {[...trucks].sort((a,b) => a.truck_id.localeCompare(b.truck_id, undefined, {numeric: true})).map(tk => (
+                            <option key={tk.id} value={tk.truck_id} className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                              {tk.truck_id} ({tk.license_plate})
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={language === 'vi' ? 'Dàn Rơ Moóc (Trailer)' : 'Chassis Trailers'} className={isDarkMode ? 'bg-slate-900 text-slate-400' : ''}>
+                          {[...trailers].sort((a,b) => a.trailer_id.localeCompare(b.trailer_id, undefined, {numeric: true})).map(tr => (
+                            <option key={tr.id} value={tr.trailer_id} className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                              {tr.trailer_id} ({tr.license_plate})
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
 
-              <div>
-                <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-indigo-500">{language === 'vi' ? 'Nhấp chọn Vị trí gầm lắp đặt *' : 'Wheel axel position *'}</label>
-                <select
-                  required
-                  value={targetPosition}
-                  onChange={e => setTargetPosition(e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg outline-none ${
-                    isDarkMode ? 'bg-slate-955 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-900 font-bold'
-                  }`}
-                >
-                  <option value="">{language === 'vi' ? '-- Ấn chọn cụm bánh --' : '-- Choose wheel --'}</option>
-                  {targetAssetId.startsWith('RM') ? (
-                    <>
-                      <option value="A_OL">Trục A - Ngoài Trái (A_OL)</option>
-                      <option value="A_IL">Trục A - Trong Trái (A_IL)</option>
-                      <option value="A_IR">Trục A - Trong Phải (A_IR)</option>
-                      <option value="A_OR">Trục A - Ngoài Phải (A_OR)</option>
-                      <option value="B_OL">Trục B - Ngoài Trái (B_OL)</option>
-                      <option value="B_IL">Trục B - Trong Trái (B_IL)</option>
-                      <option value="B_IR">Trục B - Trong Phải (B_IR)</option>
-                      <option value="B_OR">Trục B - Ngoài Phải (B_OR)</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="FL">Trục Lái - Trái (FL)</option>
-                      <option value="FR">Trục Lái - Phải (FR)</option>
-                      <option value="ORL">Trục Sau - Ngoài Trái (ORL)</option>
-                      <option value="IRL">Trục Sau - Trong Trái (IRL)</option>
-                      <option value="IRR">Trục Sau - Trong Phải (IRR)</option>
-                      <option value="ORR">Trục Sau - Ngoài Phải (ORR)</option>
-                    </>
-                  )}
-                </select>
-              </div>
+                    <div>
+                      <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-indigo-500">
+                        {language === 'vi' ? 'Nhấp chọn Vị trí gầm lắp đặt *' : 'Wheel axel position *'}
+                      </label>
+                      <select
+                        required
+                        value={targetPosition}
+                        onChange={e => setTargetPosition(e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg outline-none cursor-pointer transition-all ${
+                          isDarkMode 
+                            ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                            : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                        }`}
+                      >
+                        <option value="" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                          {language === 'vi' ? '-- Ấn chọn cụm bánh --' : '-- Choose wheel --'}
+                        </option>
+                        {isSelectedTrailer ? (
+                          <>
+                            <option value="A_OL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>OFL (Ngoài Trái - Trục A)</option>
+                            <option value="A_IL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>IFL (Trong Trái - Trục A)</option>
+                            <option value="A_IR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>IFR (Trong Phải - Trục A)</option>
+                            <option value="A_OR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>OFR (Ngoài Phải - Trục A)</option>
+                            <option value="B_OL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>ORL (Ngoài Trái - Trục B)</option>
+                            <option value="B_IL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>IRL (Trong Trái - Trục B)</option>
+                            <option value="B_IR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>IRR (Trong Phải - Trục B)</option>
+                            <option value="B_OR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>ORR (Ngoài Phải - Trục B)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="FL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Lái - Trái (FL)</option>
+                            <option value="FR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Lái - Phải (FR)</option>
+                            <option value="ORL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Sau - Ngoài Trái (ORL)</option>
+                            <option value="IRL" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Sau - Trong Trái (IRL)</option>
+                            <option value="IRR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Sau - Trong Phải (IRR)</option>
+                            <option value="ORR" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>Trục Sau - Ngoài Phải (ORR)</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  </>
+                );
+              })()}
 
               <div className="pt-2 select-none flex gap-2">
                 <button

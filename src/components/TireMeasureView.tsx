@@ -174,13 +174,13 @@ export default function TireMeasureView({
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     return t.truck_id.toLowerCase().includes(q) || t.license_plate.toLowerCase().includes(q);
-  });
+  }).sort((a, b) => a.truck_id.localeCompare(b.truck_id, undefined, { numeric: true, sensitivity: 'base' }));
 
   const filteredTrailers = trailers.filter(t => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     return t.trailer_id.toLowerCase().includes(q) || t.license_plate.toLowerCase().includes(q);
-  });
+  }).sort((a, b) => a.trailer_id.localeCompare(b.trailer_id, undefined, { numeric: true, sensitivity: 'base' }));
 
   const getDisplayPosition = (pos: string | null): string => {
     if (!pos) return '';
