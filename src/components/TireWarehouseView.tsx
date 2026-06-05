@@ -170,7 +170,56 @@ export default function TireWarehouseView({
 
   // Inputs for creating spare tyre
   const [newSerial, setNewSerial] = useState('');
-  const [newBrand, setNewBrand] = useState('Bridgestone');
+  
+  // Dynamic brand list states
+  const [brands, setBrands] = useState<string[]>(() => {
+    const saved = localStorage.getItem('tire_brands_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return ['Bridgestone', 'Michelin', 'Casumina', 'Maxxis', 'Yokohama'];
+  });
+  
+  const [newBrand, setNewBrand] = useState(() => {
+    const saved = localStorage.getItem('tire_brands_list');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      } catch (e) {}
+    }
+    return 'Bridgestone';
+  });
+
+  const [isManagingBrands, setIsManagingBrands] = useState(false);
+  const [customBrandName, setCustomBrandName] = useState('');
+
+  const handleDeleteBrand = (brandToDelete: string) => {
+    const updated = brands.filter(b => b !== brandToDelete);
+    setBrands(updated);
+    localStorage.setItem('tire_brands_list', JSON.stringify(updated));
+    if (newBrand === brandToDelete) {
+      setNewBrand(updated[0] || '');
+    }
+  };
+
+  const handleAddBrand = () => {
+    const trimmed = customBrandName.trim();
+    if (!trimmed) return;
+    if (brands.some(b => b.toLowerCase() === trimmed.toLowerCase())) {
+      alert(language === 'vi' ? 'Hãng này đã có trong danh sách!' : 'Brand already exists!');
+      return;
+    }
+    const updated = [...brands, trimmed];
+    setBrands(updated);
+    localStorage.setItem('tire_brands_list', JSON.stringify(updated));
+    setNewBrand(trimmed);
+    setCustomBrandName('');
+  };
+
   const [newSize, setNewSize] = useState('12R22.5');
   const [newInitialDepth, setNewInitialDepth] = useState('11.5');
   const [newNotes, setNewNotes] = useState('');
@@ -355,26 +404,76 @@ export default function TireWarehouseView({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 pb-2">
                 <div>
-                  <label className={`block text-[11px] uppercase mb-1.5 ${labelTextContrast}`}>
-                    {language === 'vi' ? 'Thương hiệu' : 'Brand'}
-                  </label>
-                  <select
-                    value={newBrand}
-                    onChange={e => setNewBrand(e.target.value)}
-                    className={`w-full px-2.5 py-2 border rounded-lg outline-none transition-all cursor-pointer ${
-                      isDarkMode 
-                        ? 'bg-slate-950 border-slate-700/65 text-slate-100 focus:border-indigo-505' 
-                        : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-500 font-bold'
-                    }`}
-                  >
-                    <option value="Bridgestone">Bridgestone</option>
-                    <option value="Michelin">Michelin</option>
-                    <option value="Casumina">Casumina</option>
-                    <option value="Maxxis">Maxxis</option>
-                    <option value="Yokohama">Yokohama</option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className={`block text-[11px] uppercase ${labelTextContrast}`}>
+                      {language === 'vi' ? 'Thương hiệu' : 'Brand'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsManagingBrands(!isManagingBrands)}
+                      className="text-[10px] text-blue-500 hover:text-blue-400 font-bold focus:outline-none cursor-pointer"
+                    >
+                      {isManagingBrands 
+                        ? (language === 'vi' ? 'Xong' : 'Done') 
+                        : (language === 'vi' ? 'Quản lý' : 'Manage')}
+                    </button>
+                  </div>
+                  {isManagingBrands ? (
+                    <div className="space-y-1.5 p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          placeholder={language === 'vi' ? 'Hiệu mới...' : 'Brand...'}
+                          value={customBrandName}
+                          onChange={e => setCustomBrandName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddBrand();
+                            }
+                          }}
+                          className="flex-1 px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-750 text-slate-100 rounded outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddBrand}
+                          className="p-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="max-h-20 overflow-y-auto space-y-1 pr-0.5 scrollbar-thin">
+                        {brands.map(b => (
+                          <div key={b} className="flex items-center justify-between text-[10px] py-0.5 px-1 bg-slate-900/50 border border-slate-800 rounded">
+                            <span className="truncate text-slate-300 font-medium">{b}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBrand(b)}
+                              className="text-red-500 hover:text-red-400 p-0.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      value={newBrand}
+                      onChange={e => setNewBrand(e.target.value)}
+                      className={`w-full px-2.5 py-2 border rounded-lg outline-none transition-all cursor-pointer ${
+                        isDarkMode 
+                          ? 'bg-slate-950 border-slate-700/65 text-slate-101 focus:border-indigo-505' 
+                          : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-500 font-bold'
+                      }`}
+                    >
+                      {brands.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className={`block text-[11px] uppercase mb-1.5 ${labelTextContrast}`}>

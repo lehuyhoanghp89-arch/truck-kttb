@@ -330,6 +330,13 @@ export default function App() {
       }
     }
 
+    // Convert empty inspection_expiry strings to null for PostgreSQL compatibility
+    if ('inspection_expiry' in result) {
+      if (result.inspection_expiry === '' || result.inspection_expiry === undefined) {
+        result.inspection_expiry = null;
+      }
+    }
+
     return result;
   };
 

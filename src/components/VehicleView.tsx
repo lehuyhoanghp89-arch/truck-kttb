@@ -92,7 +92,7 @@ export default function VehicleView({
   const [formPlate, setFormPlate] = useState('');
   const [formModel, setFormModel] = useState('');
   const [formStatus, setFormStatus] = useState<'ACTIVE' | 'MAINTENANCE' | 'INACTIVE'>('ACTIVE');
-  const [formInspectionExpiry, setFormInspectionExpiry] = useState('2026-12-28');
+  const [formInspectionExpiry, setFormInspectionExpiry] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
   // Trailer specific form inputs
@@ -172,7 +172,7 @@ export default function VehicleView({
       setFormPlate('');
       setFormModel('Kalmar');
       setFormStatus('ACTIVE');
-      setFormInspectionExpiry('2026-12-28');
+      setFormInspectionExpiry('');
       setFormNotes('');
     }
     setDrawerType('form_truck');
@@ -196,7 +196,7 @@ export default function VehicleView({
       setFormPlate('');
       setFormModel('Cimc 40ft');
       setFormTrailerStatus('SPARE');
-      setFormInspectionExpiry('2026-12-28');
+      setFormInspectionExpiry('');
       setFormNotes('');
     }
     setDrawerType('form_trailer');
@@ -412,7 +412,7 @@ export default function VehicleView({
               : 'ACTIVE',
             attached_trailer_id: null,
             notes: item.notes || '',
-            inspection_expiry: item.inspection_expiry || '2026-12-28',
+            inspection_expiry: item.inspection_expiry || '',
             inspection_notes: ''
           }));
           onBulkImportTrucks(cleanList);
@@ -427,7 +427,7 @@ export default function VehicleView({
               : 'SPARE',
             attached_truck_id: null,
             notes: item.notes || '',
-            inspection_expiry: item.inspection_expiry || '2026-12-28',
+            inspection_expiry: item.inspection_expiry || '',
             inspection_notes: ''
           }));
           onBulkImportTrailers(cleanList);
