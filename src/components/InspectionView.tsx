@@ -127,7 +127,7 @@ export default function InspectionView({
               filterType === 'ALL' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Tất cả ({unifiedFleet.length})
+            {language === 'vi' ? 'Tất cả' : 'All'} ({unifiedFleet.length})
           </button>
           <button
             id="inspect_tab_warn"
@@ -137,7 +137,7 @@ export default function InspectionView({
               filterType === 'EXPIRED_WARN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
-            Khẩn cấp/Sắp hạn
+            {language === 'vi' ? 'Khẩn cấp/Sắp hạn' : 'Alert/Expired'}
           </button>
         </div>
 

@@ -28,6 +28,17 @@ import ReportView from './components/ReportView';
 import TireWarehouseView from './components/TireWarehouseView';
 import UsersView from './components/UsersView';
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export default function App() {
   // Dynamic local users database state
   const [usersList, setUsersList] = useState<User[]>(() => {
@@ -106,39 +117,117 @@ export default function App() {
     return saved ? JSON.parse(saved) : []; // Empty initially, loaded on interactive measurer
   });
 
+  // Dynamic table name mappings for user database schema tolerance
+  const [maintRequestsTable, setMaintRequestsTable] = useState<'maint_requests' | 'main_requests'>('maint_requests');
+  const [tireLatestTable, setTireLatestTable] = useState<'tire_latest' | 'tire_lastest'>('tire_latest');
+
   // Supabase Initial Load
   useEffect(() => {
     if (!hasSupabaseConfig || !currentUser) return;
     
     const loadData = async () => {
       try {
+        console.log('Bắt đầu tải đồng bộ dữ liệu từ Supabase...');
+        
+        // 1. Tải các bảng độc lập chuẩn
         const [
-          { data: trucksData },
-          { data: trailersData },
-          { data: tiresData },
-          { data: tireLatestData },
-          { data: maintReqData },
-          { data: logsData },
-          { data: measuresData }
+          { data: trucksData, error: trucksError },
+          { data: trailersData, error: trailersError },
+          { data: tiresData, error: tiresError },
+          { data: logsData, error: logsError },
+          { data: measuresData, error: measuresError }
         ] = await Promise.all([
           supabase.from('trucks').select('*').order('created_date', { ascending: false }),
           supabase.from('trailers').select('*').order('created_date', { ascending: false }),
           supabase.from('tires').select('*').order('created_date', { ascending: false }),
-          supabase.from('tire_latest').select('*').order('last_updated', { ascending: false }),
-          supabase.from('maint_requests').select('*').order('created_date', { ascending: false }),
           supabase.from('repair_logs').select('*').order('created_date', { ascending: false }),
           supabase.from('tire_measures').select('*').order('measured_at', { ascending: false })
         ]);
 
-        if (trucksData) setTrucks(trucksData as Truck[]);
-        if (trailersData) setTrailers(trailersData as Trailer[]);
-        if (tiresData) setTires(tiresData as Tire[]);
+        if (trucksError) {
+          console.error('Lỗi khi tải bảng xe trucks:', trucksError);
+        } else if (trucksData) {
+          console.log(`Đã đồng bộ thành công ${trucksData.length} xe trucks.`);
+          setTrucks(trucksData as Truck[]);
+        }
+
+        if (trailersError) {
+          console.error('Lỗi khi tải bảng moóc trailers:', trailersError);
+        } else if (trailersData) {
+          console.log(`Đã đồng bộ thành công ${trailersData.length} moóc trailers.`);
+          setTrailers(trailersData as Trailer[]);
+        }
+
+        if (tiresError) {
+          console.error('Lỗi khi tải bảng lốp tires:', tiresError);
+        } else if (tiresData) {
+          console.log(`Đã đồng bộ thành công ${tiresData.length} lốp tires.`);
+          setTires(tiresData as Tire[]);
+        }
+
+        if (logsError) {
+          console.error('Lỗi khi tải bảng repair_logs:', logsError);
+        } else if (logsData) {
+          setRepairLogs(logsData as RepairLog[]);
+        }
+
+        if (measuresError) {
+          console.error('Lỗi khi tải bảng tire_measures:', measuresError);
+        } else if (measuresData) {
+          setTireMeasures(measuresData as TireMeasure[]);
+        }
+
+        // 2. Tải động tire_latest vs tire_lastest dựa trên cơ sở dữ liệu thực tế
+        let finalTireLatestTable: 'tire_latest' | 'tire_lastest' = 'tire_latest';
+        let tireLatestData = null;
+        const tireLatestRes = await supabase.from('tire_latest').select('*').order('last_updated', { ascending: false });
+        if (tireLatestRes.error) {
+          console.warn('Bảng tire_latest không tải được (thử tire_lastest):', tireLatestRes.error.message);
+          const backupRes = await supabase.from('tire_lastest').select('*').order('last_updated', { ascending: false });
+          if (!backupRes.error) {
+            finalTireLatestTable = 'tire_lastest';
+            tireLatestData = backupRes.data;
+            console.log('Phát hiện bảng tire_lastest hợp lệ trên database.');
+          } else {
+            console.error('Không tìm thấy cả bảng tire_latest và tire_lastest:', backupRes.error);
+          }
+        } else {
+          tireLatestData = tireLatestRes.data;
+        }
+        setTireLatestTable(finalTireLatestTable);
         if (tireLatestData) setTireLatest(tireLatestData as TireLatest[]);
+
+        // 3. Tải động maint_requests vs main_requests dựa trên cơ sở dữ liệu thực tế
+        let finalMaintReqTable: 'maint_requests' | 'main_requests' = 'maint_requests';
+        let maintReqData = null;
+        const maintReqRes = await supabase.from('maint_requests').select('*').order('created_date', { ascending: false });
+        if (maintReqRes.error) {
+          console.warn('Bảng maint_requests không tải được (thử main_requests):', maintReqRes.error.message);
+          const backupRes = await supabase.from('main_requests').select('*').order('created_date', { ascending: false });
+          if (!backupRes.error) {
+            finalMaintReqTable = 'main_requests';
+            maintReqData = backupRes.data;
+            console.log('Phát hiện bảng main_requests hợp lệ trên database.');
+          } else {
+            console.error('Không tìm thấy cả bảng maint_requests và main_requests:', backupRes.error);
+          }
+        } else {
+          maintReqData = maintReqRes.data;
+        }
+        setMaintRequestsTable(finalMaintReqTable);
         if (maintReqData) setMaintRequests(maintReqData as MaintRequest[]);
-        if (logsData) setRepairLogs(logsData as RepairLog[]);
-        if (measuresData) setTireMeasures(measuresData as TireMeasure[]);
+
+        // 4. Đồng bộ danh sách tài khoản từ bảng profiles (nếu có)
+        const { data: profilesData, error: profilesError } = await supabase.from('profiles').select('*');
+        if (profilesError) {
+          console.error('Lỗi khi tải bảng profiles người dùng:', profilesError);
+        } else if (profilesData && profilesData.length > 0) {
+          console.log(`Đã đồng bộ ${profilesData.length} người dùng hệ thống từ profiles.`);
+          setUsersList(profilesData as User[]);
+        }
+
       } catch (err) {
-        console.error('Lỗi khi tải dữ liệu từ Supabase:', err);
+        console.error('Lỗi nghiêm trọng khi tải dữ liệu từ Supabase:', err);
       }
     };
 
@@ -205,51 +294,71 @@ export default function App() {
   const handleAddTruck = (newTruck: Omit<Truck, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const item: Truck = {
       ...newTruck,
-      id: `tr-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Admin'
     };
     setTrucks(prev => [item, ...prev]);
-    if (hasSupabaseConfig) supabase.from('trucks').insert([item]).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trucks').insert([item]).then(({ error }) => {
+        if (error) console.error("Lỗi thêm xe trucks vào Supabase:", error);
+        else console.log("Đã thêm xe trucks thành công.");
+      });
+    }
   };
 
   const handleEditTruck = (id: string, updated: Partial<Truck>) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      const truckToUpdate = trucks.find(t => t.id === id);
-      if (truckToUpdate) supabase.from('trucks').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then();
+      supabase.from('trucks').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật xe trucks trên Supabase:", error);
+      });
     }
   };
 
   const handleDeleteTruck = (id: string) => {
     setTrucks(prev => prev.filter(t => t.id !== id));
-    if (hasSupabaseConfig) supabase.from('trucks').delete().eq('id', id).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trucks').delete().eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi xóa xe trucks khỏi Supabase:", error);
+      });
+    }
   };
 
   const handleAddTrailer = (newTrailer: Omit<Trailer, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const item: Trailer = {
       ...newTrailer,
-      id: `trail-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Admin'
     };
     setTrailers(prev => [item, ...prev]);
-    if (hasSupabaseConfig) supabase.from('trailers').insert([item]).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trailers').insert([item]).then(({ error }) => {
+        if (error) console.error("Lỗi thêm moóc trailers vào Supabase:", error);
+        else console.log("Đã thêm moóc trailers thành công.");
+      });
+    }
   };
 
   const handleEditTrailer = (id: string, updated: Partial<Trailer>) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      const trailerToUpdate = trailers.find(t => t.id === id);
-      if (trailerToUpdate) supabase.from('trailers').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then();
+      supabase.from('trailers').update({ ...updated, updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật trailers trên Supabase:", error);
+      });
     }
   };
 
   const handleDeleteTrailer = (id: string) => {
     setTrailers(prev => prev.filter(t => t.id !== id));
-    if (hasSupabaseConfig) supabase.from('trailers').delete().eq('id', id).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trailers').delete().eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi xóa moóc trailers khỏi Supabase:", error);
+      });
+    }
   };
 
   // Linking Trucks & Trailers Gắn Rơ Moóc logic (Image 6 slider panel mechanics)
@@ -260,8 +369,12 @@ export default function App() {
     setTrailers(prev => prev.map(t => t.trailer_id === trailerId ? { ...t, attached_truck_id: truckId, status: 'ACTIVE' } : t));
 
     if (hasSupabaseConfig) {
-      supabase.from('trucks').update({ attached_trailer_id: trailerId }).eq('truck_id', truckId).then();
-      supabase.from('trailers').update({ attached_truck_id: truckId, status: 'ACTIVE' }).eq('trailer_id', trailerId).then();
+      supabase.from('trucks').update({ attached_trailer_id: trailerId }).eq('truck_id', truckId).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật gắn moóc (bảng trucks):", error);
+      });
+      supabase.from('trailers').update({ attached_truck_id: truckId, status: 'ACTIVE' }).eq('trailer_id', trailerId).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật gắn moóc (bảng trailers):", error);
+      });
     }
   };
 
@@ -276,8 +389,12 @@ export default function App() {
       setTrailers(prev => prev.map(t => t.trailer_id === trailerId ? { ...t, attached_truck_id: null, status: 'SPARE' } : t));
 
       if (hasSupabaseConfig) {
-        supabase.from('trucks').update({ attached_trailer_id: null }).eq('truck_id', truckId).then();
-        supabase.from('trailers').update({ attached_truck_id: null, status: 'SPARE' }).eq('trailer_id', trailerId).then();
+        supabase.from('trucks').update({ attached_trailer_id: null }).eq('truck_id', truckId).then(({ error }) => {
+          if (error) console.error("Lỗi nhả moóc (bảng trucks):", error);
+        });
+        supabase.from('trailers').update({ attached_truck_id: null, status: 'SPARE' }).eq('trailer_id', trailerId).then(({ error }) => {
+          if (error) console.error("Lỗi nhả moóc (bảng trailers):", error);
+        });
       }
     }
   };
@@ -286,13 +403,17 @@ export default function App() {
   const handleAddRepairLog = (log: Omit<RepairLog, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const entry: RepairLog = {
       ...log,
-      id: `rep-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Auto'
     };
     setRepairLogs(prev => [entry, ...prev]);
-    if (hasSupabaseConfig) supabase.from('repair_logs').insert([entry]).then();
+    if (hasSupabaseConfig) {
+      supabase.from('repair_logs').insert([entry]).then(({ error }) => {
+        if (error) console.error("Lỗi thêm repair_log vào Supabase:", error);
+      });
+    }
   };
 
   // Approving Awaiting Requests (Duyệt yêu cầu thay lốp, đảo lốp tại Dashboard)
@@ -310,7 +431,7 @@ export default function App() {
           return {
             ...t,
             tire_seri: req.new_tire_seri,
-            depth_mm: matchedWarehouseTire ? matchedWarehouseTire.current_depth_mm : 11.5,
+            depth_mm: matchedWarehouseTire ? matchedWarehouseTire.current_depth : 11.5,
             status: 'OK',
             measured_at: new Date().toISOString(),
             measured_by: currentUser?.full_name || 'Duyệt viên tự động'
@@ -363,54 +484,119 @@ export default function App() {
 
     // Set status to DONE
     setMaintRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'DONE', updated_date: new Date().toISOString() } : r));
-    if (hasSupabaseConfig) supabase.from('maint_requests').update({ status: 'DONE', updated_date: new Date().toISOString() }).eq('id', id).then();
+    
+    if (hasSupabaseConfig) {
+      // Update ticket status in DB
+      supabase.from(maintRequestsTable).update({ status: 'DONE', updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+        if (error) console.error(`Lỗi cập nhật trạng thái yêu cầu trên bảng ${maintRequestsTable}:`, error);
+      });
+
+      // Synchronize changes to tables in DB
+      if (req.request_type === 'REPLACE' && req.new_tire_seri) {
+        supabase.from('tires').update({ asset_id: null, position: null, status: 'SPARE' }).eq('tire_seri', req.old_tire_seri).then();
+        supabase.from('tires').update({ asset_id: req.asset_id, position: req.position, status: 'IN_USE' }).eq('tire_seri', req.new_tire_seri).then();
+
+        const wt = tires.find(wt => wt.tire_seri === req.new_tire_seri);
+        supabase.from(tireLatestTable).update({
+          tire_seri: req.new_tire_seri,
+          depth_mm: wt ? wt.current_depth : 11.5,
+          status: 'OK',
+          last_updated: new Date().toISOString(),
+          measured_by: currentUser?.full_name || 'Duyệt viên tự động'
+        }).eq('asset_id', req.asset_id).eq('position', req.position).then();
+      }
+
+      if (req.request_type === 'SWAP' && req.swap_position) {
+        const recordA = tireLatest.find(t => t.asset_id === req.asset_id && t.position === req.position);
+        const recordB = tireLatest.find(t => t.asset_id === req.asset_id && t.position === req.swap_position);
+        if (recordA && recordB) {
+          supabase.from(tireLatestTable).update({
+            tire_seri: recordB.tire_seri,
+            depth_mm: recordB.depth_mm,
+            status: recordB.status
+          }).eq('asset_id', req.asset_id).eq('position', req.position).then();
+
+          supabase.from(tireLatestTable).update({
+            tire_seri: recordA.tire_seri,
+            depth_mm: recordA.depth_mm,
+            status: recordA.status
+          }).eq('asset_id', req.asset_id).eq('position', req.swap_position).then();
+
+          supabase.from('tires').update({ position: req.swap_position }).eq('tire_seri', recordA.tire_seri).then();
+          supabase.from('tires').update({ position: req.position }).eq('tire_seri', recordB.tire_seri).then();
+        }
+      }
+    }
+
     alert('Đã DUYỆT yêu cầu vận hành xe thành công. Các chỉ số vỏ lốp trên xe và tồn kho đã được sắp đặt tự động.');
   };
 
   const handleActionRejectRequest = (id: string) => {
     setMaintRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'REJECTED', updated_date: new Date().toISOString() } : r));
-    if (hasSupabaseConfig) supabase.from('maint_requests').update({ status: 'REJECTED', updated_date: new Date().toISOString() }).eq('id', id).then();
+    if (hasSupabaseConfig) {
+      supabase.from(maintRequestsTable).update({ status: 'REJECTED', updated_date: new Date().toISOString() }).eq('id', id).then(({ error }) => {
+        if (error) console.error(`Lỗi cập nhật từ chối trên bảng ${maintRequestsTable}:`, error);
+      });
+    }
     alert('Đã từ chối phiếu yêu cầu kỹ thuật.');
   };
 
   // Adjust Expiry Date calendar registry triggers (Kiểm định)
   const handleEditTruckExpiry = (id: string, targetDate: string) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
-    if (hasSupabaseConfig) supabase.from('trucks').update({ inspection_expiry: targetDate }).eq('id', id).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trucks').update({ inspection_expiry: targetDate }).eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật kiểm định xe trucks:", error);
+      });
+    }
   };
 
   const handleEditTrailerExpiry = (id: string, targetDate: string) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
-    if (hasSupabaseConfig) supabase.from('trailers').update({ inspection_expiry: targetDate }).eq('id', id).then();
+    if (hasSupabaseConfig) {
+      supabase.from('trailers').update({ inspection_expiry: targetDate }).eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật kiểm định trailers:", error);
+      });
+    }
   };
 
   // Bulk uploads from CSV files
   const handleBulkImportTrucks = (importList: Omit<Truck, 'id' | 'created_date' | 'updated_date' | 'created_by'>[]) => {
     const list: Truck[] = importList.map((tk, idx) => ({
       ...tk,
-      id: `tr-bulk-${Date.now()}-${idx}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Bulk Loader'
     }));
     setTrucks(prev => [...list, ...prev]);
+    if (hasSupabaseConfig) {
+      supabase.from('trucks').insert(list).then(({ error }) => {
+        if (error) console.error("Lỗi khi import xe trucks:", error);
+      });
+    }
   };
 
   const handleBulkImportTrailers = (importList: Omit<Trailer, 'id' | 'created_date' | 'updated_date' | 'created_by'>[]) => {
     const list: Trailer[] = importList.map((tr, idx) => ({
       ...tr,
-      id: `trail-bulk-${Date.now()}-${idx}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Bulk Loader'
     }));
     setTrailers(prev => [...list, ...prev]);
+    if (hasSupabaseConfig) {
+      supabase.from('trailers').insert(list).then(({ error }) => {
+        if (error) console.error("Lỗi khi import moóc trailers:", error);
+      });
+    }
   };
 
   const handleBulkImportTires = (importList: Omit<Tire, 'id' | 'created_date' | 'updated_date' | 'created_by'>[]) => {
     const list: Tire[] = importList.map((tr, idx) => ({
       ...tr,
-      id: `tire-bulk-${Date.now()}-${idx}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Bulk Loader'
@@ -426,13 +612,18 @@ export default function App() {
       });
       return [...filteredNew, ...prev];
     });
+    if (hasSupabaseConfig) {
+      supabase.from('tires').insert(list).then(({ error }) => {
+        if (error) console.error("Lỗi khi import vỏ lốp tires:", error);
+      });
+    }
   };
 
   // Logging interactive Tyre inspections results
   const handleAddTireMeasure = (newMeasure: Omit<TireMeasure, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const measureItem: TireMeasure = {
       ...newMeasure,
-      id: `meas-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'Inspector'
@@ -465,22 +656,50 @@ export default function App() {
       }
       return t;
     }));
+
+    if (hasSupabaseConfig) {
+      // 1. Insert measure record
+      supabase.from('tire_measures').insert([measureItem]).then(({ error }) => {
+        if (error) console.error("Lỗi lưu phiếu đo tire_measures:", error);
+      });
+      
+      // 2. Update current depth in tires inventory
+      supabase.from('tires').update({ current_depth: newMeasure.depth_mm }).eq('tire_seri', newMeasure.tire_seri).then();
+
+      // 3. Update current live trackers
+      supabase.from(tireLatestTable).update({
+        depth_mm: newMeasure.depth_mm,
+        status: newMeasure.status,
+        last_updated: new Date().toISOString(),
+        measured_by: currentUser?.full_name || 'Kiểm định viên'
+      }).eq('asset_id', newMeasure.asset_id).eq('position', newMeasure.position).then();
+    }
   };
 
   // Registering loose tyre elements into stockpile
   const handleAddTire = (newTirePayload: Omit<Tire, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const item: Tire = {
       ...newTirePayload,
-      id: `tire-unit-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'Warehouse Staff'
     };
     setTires(prev => [item, ...prev]);
+    if (hasSupabaseConfig) {
+      supabase.from('tires').insert([item]).then(({ error }) => {
+        if (error) console.error("Lỗi thêm vỏ lốp tires vào Supabase:", error);
+      });
+    }
   };
 
   const handleDeleteTire = (id: string) => {
     setTires(prev => prev.filter(t => t.id !== id));
+    if (hasSupabaseConfig) {
+      supabase.from('tires').delete().eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi xóa vỏ lốp tires khỏi Supabase:", error);
+      });
+    }
   };
 
   // Installation of loose stockpile tyres onto empty vehicle slots
@@ -514,10 +733,20 @@ export default function App() {
         }
         return tl;
       }));
+      
+      if (hasSupabaseConfig) {
+        supabase.from(tireLatestTable).update({
+          tire_seri: serial,
+          depth_mm: targetTireObj.current_depth,
+          status: 'OK',
+          last_updated: new Date().toISOString(),
+          measured_by: currentUser?.full_name || 'Gắn viên'
+        }).eq('asset_id', assetId).eq('position', position).then();
+      }
     } else {
       // Create new skeleton entry
       const newLiveSlot: TireLatest = {
-        id: `tl-${Date.now()}`,
+        id: generateUUID(),
         created_date: new Date().toISOString(),
         updated_date: new Date().toISOString(),
         created_by: currentUser?.full_name || 'Gắn viên',
@@ -531,6 +760,18 @@ export default function App() {
         measured_by: currentUser?.full_name || 'Gắn viên'
       };
       setTireLatest(prev => [...prev, newLiveSlot]);
+      
+      if (hasSupabaseConfig) {
+        supabase.from(tireLatestTable).insert([newLiveSlot]).then(({ error }) => {
+          if (error) console.error(`Lỗi chèn live slot vào bảng ${tireLatestTable}:`, error);
+        });
+      }
+    }
+
+    if (hasSupabaseConfig) {
+      supabase.from('tires').update({ asset_id: assetId, position: position, status: 'IN_USE' }).eq('tire_seri', serial).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật lốp trong kho thành IN_USE:", error);
+      });
     }
   };
 
@@ -552,6 +793,17 @@ export default function App() {
     // 2) Disconnect from Live TireLatest registry
     if (asset_id && position) {
       setTireLatest(prev => prev.filter(tl => !(tl.asset_id === asset_id && tl.position === position)));
+    }
+
+    if (hasSupabaseConfig) {
+      supabase.from('tires').update({ asset_id: null, position: null, status: 'SPARE' }).eq('tire_seri', serial).then(({ error }) => {
+        if (error) console.error("Lỗi tháo lốp khỏi xe trên Supabase:", error);
+      });
+      if (asset_id && position) {
+        supabase.from(tireLatestTable).delete().eq('asset_id', asset_id).eq('position', position).then(({ error }) => {
+          if (error) console.error(`Lỗi xóa live slot trên bảng ${tireLatestTable}:`, error);
+        });
+      }
     }
   };
 
@@ -604,6 +856,7 @@ export default function App() {
     }));
 
     // 4) Auto append Completed Maintenance Ticket
+    const ticketId = generateUUID();
     const repairTicket = {
       asset_id: assetId,
       asset_type: assetId.startsWith('RM') ? 'TRAILER' : 'TRUCK' as 'TRAILER' | 'TRUCK',
@@ -613,27 +866,58 @@ export default function App() {
       notes: 'Đã hoàn thành tự động đồng bộ.'
     };
     
-    setMaintRequests(prev => [
-      {
-        ...repairTicket,
-        id: `maint-req-${Date.now()}`,
-        created_date: new Date().toISOString(),
-        updated_date: new Date().toISOString(),
-        created_by: currentUser?.full_name || 'Huy Thợ Lốp'
-      },
-      ...prev
-    ]);
+    const newMaint: MaintRequest = {
+      ...repairTicket,
+      id: ticketId,
+      created_date: new Date().toISOString(),
+      updated_date: new Date().toISOString(),
+      created_by: currentUser?.full_name || 'Huy Thợ Lốp'
+    };
+
+    setMaintRequests(prev => [newMaint, ...prev]);
+
+    if (hasSupabaseConfig) {
+      supabase.from('tires').update({
+        asset_id: null,
+        position: null,
+        status: 'DAMAGED',
+        notes: `[BÁO HỎNG: ${damageCause}]`
+      }).eq('tire_seri', damagedSeri).then();
+
+      supabase.from('tires').update({
+        asset_id: assetId,
+        position: position,
+        status: 'IN_USE'
+      }).eq('tire_seri', replacementSeri).then();
+
+      supabase.from(tireLatestTable).update({
+        tire_seri: replacementSeri,
+        depth_mm: backupTireObj.current_depth,
+        status: 'OK',
+        last_updated: new Date().toISOString(),
+        measured_by: currentUser?.full_name || 'Huy Thợ Lốp'
+      }).eq('asset_id', assetId).eq('position', position).then();
+
+      supabase.from(maintRequestsTable).insert([newMaint]).then(({ error }) => {
+        if (error) console.error(`Lỗi chèn phiếu dịch vụ tự động vào ${maintRequestsTable}:`, error);
+      });
+    }
   };
 
   const handleAddMaintRequest = (req: Omit<MaintRequest, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const ticket: MaintRequest = {
       ...req,
-      id: `maint-req-${Date.now()}`,
+      id: generateUUID(),
       created_date: new Date().toISOString(),
       updated_date: new Date().toISOString(),
       created_by: currentUser?.full_name || 'System Operator'
     };
     setMaintRequests(prev => [ticket, ...prev]);
+    if (hasSupabaseConfig) {
+      supabase.from(maintRequestsTable).insert([ticket]).then(({ error }) => {
+        if (error) console.error(`Lỗi chèn phiếu yêu cầu vào ${maintRequestsTable}:`, error);
+      });
+    }
   };
 
   // Guard routing for unauthenticated users

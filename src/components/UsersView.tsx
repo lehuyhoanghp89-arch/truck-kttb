@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { Users, Shield, ShieldCheck, Mail, Lock, UserPlus, KeyRound, Check, Edit2, Trash2 } from 'lucide-react';
+import { supabase, hasSupabaseConfig } from '../lib/supabase';
 
 interface UsersViewProps {
   usersList: User[];
@@ -101,26 +102,89 @@ export default function UsersView({ usersList, onUpdateUsers, currentUser, isDar
         role: formData.role,
         permission: formData.permission
       } : u));
+      
+      if (hasSupabaseConfig) {
+        supabase.from('profiles').update({
+          email: formData.email,
+          full_name: formData.full_name,
+          username: formData.username,
+          role: formData.role,
+          permission: formData.permission
+        }).eq('id', editingUserId).then(({ error }) => {
+          if (error) console.error("Lỗi cập nhật profile:", error.message);
+        });
+      }
       setSuccess('Cập nhật người dùng thành công!');
+      setTimeout(() => {
+        resetForm();
+      }, 1500);
     } else {
       // Add user
-      const newUser: User = {
-        id: `usr-${Date.now()}`,
-        email: formData.email,
-        full_name: formData.full_name,
-        username: formData.username,
-        password: formData.password,
-        role: formData.role,
-        permission: formData.permission
-      };
-      onUpdateUsers(prev => [...prev, newUser]);
-      setSuccess('Thêm người dùng mới thành công!');
+      if (hasSupabaseConfig) {
+        setSuccess('Đang đăng ký tài khoản liên kết trên Supabase Auth...');
+        supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.full_name,
+              username: formData.username,
+              role: formData.role,
+              permission: formData.permission
+            }
+          }
+        }).then(({ data, error }) => {
+          if (error) {
+            setError('Lỗi khi đăng ký tài khoản Supabase: ' + error.message);
+          } else {
+            const authUserId = data.user?.id || `usr-${Date.now()}`;
+            const newUser: User = {
+              id: authUserId,
+              email: formData.email,
+              full_name: formData.full_name,
+              username: formData.username,
+              password: formData.password,
+              role: formData.role,
+              permission: formData.permission
+            };
+            onUpdateUsers(prev => [...prev, newUser]);
+            
+            // Insert profile
+            supabase.from('profiles').insert([{
+              id: authUserId,
+              email: formData.email,
+              full_name: formData.full_name,
+              username: formData.username,
+              role: formData.role,
+              permission: formData.permission
+            }]).then(({ error: profileError }) => {
+              if (profileError) {
+                console.warn('Lỗi ghi vào bảng profiles:', profileError.message);
+              }
+            });
+            setSuccess('Đã thêm người dùng và đăng ký tài khoản Supabase Auth thành công!');
+            setTimeout(() => {
+              resetForm();
+            }, 1500);
+          }
+        });
+      } else {
+        const newUser: User = {
+          id: `usr-${Date.now()}`,
+          email: formData.email,
+          full_name: formData.full_name,
+          username: formData.username,
+          password: formData.password,
+          role: formData.role,
+          permission: formData.permission
+        };
+        onUpdateUsers(prev => [...prev, newUser]);
+        setSuccess('Thêm người dùng mới thành công!');
+        setTimeout(() => {
+          resetForm();
+        }, 1500);
+      }
     }
-    
-    // Automatically reset form after 1.5s
-    setTimeout(() => {
-      resetForm();
-    }, 1500);
   };
 
   const handleDeleteUser = (id: string) => {
@@ -134,6 +198,11 @@ export default function UsersView({ usersList, onUpdateUsers, currentUser, isDar
     }
     if (window.confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) {
       onUpdateUsers(prev => prev.filter(u => u.id !== id));
+      if (hasSupabaseConfig) {
+        supabase.from('profiles').delete().eq('id', id).then(({ error }) => {
+          if (error) console.error("Lỗi xóa profile:", error.message);
+        });
+      }
       setSuccess('Đã xóa tài khoản.');
       setTimeout(() => setSuccess(''), 2000);
     }
