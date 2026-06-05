@@ -300,6 +300,39 @@ export default function App() {
     setLanguage(prev => (prev === 'vi' ? 'en' : 'vi'));
   };
 
+  const isValidUUID = (val: any): boolean => {
+    if (typeof val !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  };
+
+  const sanitizeForDb = (obj: any): any => {
+    const result = { ...obj };
+    
+    // Set created_by to currentUser?.id if it is a valid UUID, otherwise set to null
+    if ('created_by' in result) {
+      if (currentUser?.id && isValidUUID(currentUser.id)) {
+        result.created_by = currentUser.id;
+      } else if (isValidUUID(result.created_by)) {
+        // Already a UUID
+      } else {
+        result.created_by = null;
+      }
+    }
+
+    // Set approved_by to currentUser?.id if it is a valid UUID, otherwise set to null
+    if ('approved_by' in result) {
+      if (currentUser?.id && isValidUUID(currentUser.id)) {
+        result.approved_by = currentUser.id;
+      } else if (isValidUUID(result.approved_by)) {
+        // Already a UUID
+      } else {
+        result.approved_by = null;
+      }
+    }
+
+    return result;
+  };
+
   // Fleet Modification callbacks
   const handleAddTruck = (newTruck: Omit<Truck, 'id' | 'created_date' | 'updated_date' | 'created_by'>) => {
     const item: Truck = {
@@ -311,8 +344,8 @@ export default function App() {
     };
     setTrucks(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      // Safe insert with dynamic column matching
-      let payload: any = { ...item };
+      // Safe insert with dynamic column matching and uuid normalization
+      let payload: any = sanitizeForDb(item);
       if (trucksColumns && trucksColumns.length > 0) {
         const filteredPayload: any = {};
         Object.keys(payload).forEach(key => {
@@ -403,7 +436,7 @@ export default function App() {
     };
     setTrailers(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      let payload: any = { ...item };
+      let payload: any = sanitizeForDb(item);
       if (trailersColumns && trailersColumns.length > 0) {
         const filteredPayload: any = {};
         Object.keys(payload).forEach(key => {
@@ -524,7 +557,8 @@ export default function App() {
     };
     setRepairLogs(prev => [entry, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('repair_logs').insert([entry]).then(({ error }) => {
+      const dbEntry = sanitizeForDb(entry);
+      supabase.from('repair_logs').insert([dbEntry]).then(({ error }) => {
         if (error) console.error("Lỗi thêm repair_log vào Supabase:", error);
       });
     }
@@ -686,7 +720,7 @@ export default function App() {
     setTrucks(prev => [...list, ...prev]);
     if (hasSupabaseConfig) {
       const payloadList = list.map(item => {
-        let payload: any = { ...item };
+        let payload: any = sanitizeForDb(item);
         if (trucksColumns && trucksColumns.length > 0) {
           const filtered: any = {};
           Object.keys(payload).forEach(key => {
@@ -718,7 +752,7 @@ export default function App() {
     setTrailers(prev => [...list, ...prev]);
     if (hasSupabaseConfig) {
       const payloadList = list.map(item => {
-        let payload: any = { ...item };
+        let payload: any = sanitizeForDb(item);
         if (trailersColumns && trailersColumns.length > 0) {
           const filtered: any = {};
           Object.keys(payload).forEach(key => {
@@ -759,7 +793,8 @@ export default function App() {
       return [...filteredNew, ...prev];
     });
     if (hasSupabaseConfig) {
-      supabase.from('tires').insert(list).then(({ error }) => {
+      const sanitizedList = list.map(item => sanitizeForDb(item));
+      supabase.from('tires').insert(sanitizedList).then(({ error }) => {
         if (error) console.error("Lỗi khi import vỏ lốp tires:", error);
       });
     }
@@ -805,7 +840,8 @@ export default function App() {
 
     if (hasSupabaseConfig) {
       // 1. Insert measure record
-      supabase.from('tire_measures').insert([measureItem]).then(({ error }) => {
+      const dbMeasureItem = sanitizeForDb(measureItem);
+      supabase.from('tire_measures').insert([dbMeasureItem]).then(({ error }) => {
         if (error) console.error("Lỗi lưu phiếu đo tire_measures:", error);
       });
       
@@ -833,7 +869,8 @@ export default function App() {
     };
     setTires(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from('tires').insert([item]).then(({ error }) => {
+      const dbItem = sanitizeForDb(item);
+      supabase.from('tires').insert([dbItem]).then(({ error }) => {
         if (error) console.error("Lỗi thêm vỏ lốp tires vào Supabase:", error);
       });
     }
@@ -908,7 +945,8 @@ export default function App() {
       setTireLatest(prev => [...prev, newLiveSlot]);
       
       if (hasSupabaseConfig) {
-        supabase.from(tireLatestTable).insert([newLiveSlot]).then(({ error }) => {
+        const dbSlot = sanitizeForDb(newLiveSlot);
+        supabase.from(tireLatestTable).insert([dbSlot]).then(({ error }) => {
           if (error) console.error(`Lỗi chèn live slot vào bảng ${tireLatestTable}:`, error);
         });
       }
@@ -1046,7 +1084,8 @@ export default function App() {
         measured_by: currentUser?.full_name || 'Huy Thợ Lốp'
       }).eq('asset_id', assetId).eq('position', position).then();
 
-      supabase.from(maintRequestsTable).insert([newMaint]).then(({ error }) => {
+      const dbMaint = sanitizeForDb(newMaint);
+      supabase.from(maintRequestsTable).insert([dbMaint]).then(({ error }) => {
         if (error) console.error(`Lỗi chèn phiếu dịch vụ tự động vào ${maintRequestsTable}:`, error);
       });
     }
@@ -1062,7 +1101,8 @@ export default function App() {
     };
     setMaintRequests(prev => [ticket, ...prev]);
     if (hasSupabaseConfig) {
-      supabase.from(maintRequestsTable).insert([ticket]).then(({ error }) => {
+      const dbTicket = sanitizeForDb(ticket);
+      supabase.from(maintRequestsTable).insert([dbTicket]).then(({ error }) => {
         if (error) console.error(`Lỗi chèn phiếu yêu cầu vào ${maintRequestsTable}:`, error);
       });
     }
