@@ -207,7 +207,7 @@ export default function TireMeasureView({
     );
     const isSelected = selectedPosition === position;
 
-    let bgClass = 'bg-slate-950 border-slate-750 text-slate-500 hover:border-slate-500';
+    let bgClass = 'bg-slate-950 border-slate-700/50 text-slate-500 hover:border-slate-500';
     if (record) {
       if (record.status === 'OK') bgClass = 'bg-emerald-950/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-950/40 hover:border-emerald-500';
       else if (record.status === 'WARN') bgClass = 'bg-amber-950/20 border-amber-500/50 text-amber-400 hover:bg-amber-950/40 hover:border-amber-500';
@@ -301,7 +301,7 @@ export default function TireMeasureView({
                   onClick={() => handleSelectAsset(truck.truck_id, 'TRUCK')}
                   className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                     isDarkMode 
-                      ? 'bg-slate-900/40 border-slate-705 hover:border-indigo-505/30' 
+                      ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
                       : 'bg-white border-slate-150 hover:bg-slate-50 hover:border-slate-250 shadow-xs'
                   }`}
                 >
@@ -325,7 +325,7 @@ export default function TireMeasureView({
                   onClick={() => handleSelectAsset(trailer.trailer_id, 'TRAILER')}
                   className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                     isDarkMode 
-                      ? 'bg-slate-900/40 border-slate-705 hover:border-indigo-505/30' 
+                      ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
                       : 'bg-white border-slate-150 hover:bg-slate-50 hover:border-slate-250 shadow-xs'
                   }`}
                 >
@@ -384,7 +384,7 @@ export default function TireMeasureView({
             
             {/* Skeletal Wheel selection diagram center panel */}
             <div className={`lg:col-span-8 p-6 border rounded-2xl flex flex-col items-center ${
-              isDarkMode ? 'bg-slate-900/20 border-slate-705' : 'bg-slate-50/50 border-slate-150'
+              isDarkMode ? 'bg-slate-900/20 border-slate-700/50' : 'bg-slate-50/50 border-slate-150'
             }`}>
               
               <div className="text-xs text-slate-500 italic mb-4 font-semibold flex items-center gap-1.5 justify-center">
@@ -451,7 +451,7 @@ export default function TireMeasureView({
             <div className="lg:col-span-4 space-y-4 font-sans select-none">
               
               {/* Box 1: Tiêu chuẩn đánh giá */}
-              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-705' : 'bg-white border-slate-200'}`}>
+              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-700/50' : 'bg-white border-slate-200'}`}>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 block">Tiêu chuẩn đánh giá</h4>
                 <div className="space-y-2 font-semibold text-xs leading-normal">
                   <div className="flex items-center gap-2.5">
@@ -470,7 +470,7 @@ export default function TireMeasureView({
               </div>
 
               {/* Box 2: Trạng thái hiện tại selection wheel info */}
-              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-705' : 'bg-white border-slate-200'}`}>
+              <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-700/50' : 'bg-white border-slate-200'}`}>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2 block">Thông số chi tiết</h4>
                 
                 {selectedPosition ? (

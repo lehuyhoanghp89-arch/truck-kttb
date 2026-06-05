@@ -15,7 +15,7 @@ import {
   MaintRequest, 
   RepairLog 
 } from './types';
-import { Menu, X, Sun, Moon, LogOut } from 'lucide-react';
+import { Menu, X, Sun, Moon, LogOut, Truck as TruckIcon } from 'lucide-react';
 import { supabase, hasSupabaseConfig } from './lib/supabase';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
@@ -1169,11 +1169,11 @@ export default function App() {
           </button>
           
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <div className="w-3.5 h-3.5 bg-white rounded-xs rotate-45"></div>
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <TruckIcon className="w-4.5 h-4.5 text-white" />
             </div>
             <div>
-              <span className={`font-black text-sm tracking-tight block leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Terminor Tracktor</span>
+              <span className={`font-black text-sm tracking-tight block leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>TerminalTracktor</span>
               <span className="text-[8px] uppercase tracking-widest text-slate-500 block font-bold font-mono mt-0.5">TT-Port</span>
             </div>
           </div>

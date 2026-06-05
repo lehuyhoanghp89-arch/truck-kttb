@@ -673,7 +673,7 @@ export default function VehicleView({
               key={truck.id}
               className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-300 ${
                 isDarkMode 
-                  ? 'bg-slate-900/40 border-slate-800/20 hover:border-indigo-500/30' 
+                  ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
                   : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
               }`}
             >
@@ -823,7 +823,7 @@ export default function VehicleView({
               key={trailer.id}
               className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-305 ${
                 isDarkMode 
-                  ? 'bg-slate-900/40 border-slate-800/20 hover:border-indigo-500/30' 
+                  ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
                   : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
               }`}
             >

@@ -88,12 +88,12 @@ export default function Sidebar({
         <div id="sidebar_header_brand" className={`flex ${collapsedState ? 'flex-col items-center justify-center gap-3' : 'items-center justify-between'} py-2 px-1`}>
           {!collapsedState ? (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                <div className="w-4 h-4 bg-white rounded-sm rotate-45 animate-pulse"></div>
+              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Truck className="w-5 h-5 text-white" />
               </div>
               <div className="overflow-hidden">
                 <div className="font-extrabold text-md text-white tracking-tight whitespace-nowrap">
-                  Terminor Tracktor
+                  TerminalTracktor
                 </div>
                 <div className="text-[9px] uppercase tracking-widest font-bold text-slate-500 whitespace-nowrap">
                   quản lý xe Track
@@ -101,8 +101,8 @@ export default function Sidebar({
               </div>
             </div>
           ) : (
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <div className="w-4 h-4 bg-white rounded-sm rotate-45"></div>
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0" title="TerminalTracktor">
+              <Truck className="w-5 h-5 text-white" />
             </div>
           )}
 
