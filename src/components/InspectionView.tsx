@@ -263,6 +263,7 @@ export default function InspectionView({
                               required
                               value={nextExpiryInput}
                               onChange={e => setNextExpiryInput(e.target.value)}
+                              onClick={e => { try { e.currentTarget.showPicker(); } catch(err) {} }}
                               className={`px-2 py-1 border rounded-md font-mono text-xs focus:border-indigo-500 outline-none ${
                                 isDarkMode 
                                   ? 'bg-slate-950 border-slate-705 text-slate-100' 

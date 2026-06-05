@@ -632,6 +632,7 @@ export default function TireMeasureView({
                        <input
                          type="date"
                          value={measuredAt}
+                        onClick={e => { try { e.currentTarget.showPicker(); } catch(err) {} }}
                          onChange={e => setMeasuredAt(e.target.value)}
                          className="w-full px-4 py-3 pr-12 bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-850 focus:border-indigo-505 text-slate-800 dark:text-slate-100 font-mono text-sm rounded-xl outline-none transition-all"
                        />

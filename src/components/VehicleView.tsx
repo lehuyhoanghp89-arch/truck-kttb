@@ -105,6 +105,11 @@ export default function VehicleView({
   const [repairTechnician, setRepairTechnician] = useState('');
   const [repairCost, setRepairCost] = useState('0');
   const [repairNotes, setRepairNotes] = useState('');
+  const [repairStartTime, setRepairStartTime] = useState(() => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - offset).toISOString().slice(0, 16);
+  });
 
   // Sơ đồ lốp auxiliary helper
   const renderTyreCell = (positionLabel: string, latestEntry: TireLatest | undefined) => {
@@ -159,12 +164,12 @@ export default function VehicleView({
     if (editTarget) {
       setIsEditingForm(true);
       setSelectedAssetId(editTarget.truck_id);
-      setFormTruckId(editTarget.truck_id);
-      setFormPlate(editTarget.license_plate);
-      setFormModel(editTarget.model);
+      setFormTruckId(editTarget.truck_id || '');
+      setFormPlate(editTarget.license_plate || '');
+      setFormModel(editTarget.model || '');
       setFormStatus(editTarget.status);
-      setFormInspectionExpiry(editTarget.inspection_expiry);
-      setFormNotes(editTarget.notes);
+      setFormInspectionExpiry(editTarget.inspection_expiry || '');
+      setFormNotes(editTarget.notes || '');
     } else {
       setIsEditingForm(false);
       setSelectedAssetId(null);
@@ -183,12 +188,12 @@ export default function VehicleView({
     if (editTarget) {
       setIsEditingForm(true);
       setSelectedAssetId(editTarget.trailer_id);
-      setFormTruckId(editTarget.trailer_id); // using common state for key ID
-      setFormPlate(editTarget.license_plate);
-      setFormModel(editTarget.model);
+      setFormTruckId(editTarget.trailer_id || ''); // using common state for key ID
+      setFormPlate(editTarget.license_plate || '');
+      setFormModel(editTarget.model || '');
       setFormTrailerStatus(editTarget.status);
-      setFormInspectionExpiry(editTarget.inspection_expiry);
-      setFormNotes(editTarget.notes);
+      setFormInspectionExpiry(editTarget.inspection_expiry || '');
+      setFormNotes(editTarget.notes || '');
     } else {
       setIsEditingForm(false);
       setSelectedAssetId(null);
@@ -295,7 +300,7 @@ export default function VehicleView({
       onAddRepairLog({
         asset_id: selectedAssetId,
         asset_type: selectedAssetType,
-        start_time: new Date().toISOString(),
+        start_time: repairStartTime ? new Date(repairStartTime).toISOString() : new Date().toISOString(),
         end_time: '',
         fault_description: repairDescription,
         root_cause: repairRootCause,
@@ -319,6 +324,10 @@ export default function VehicleView({
       setRepairTechnician('');
       setRepairCost('0');
       setRepairNotes('');
+      // reset repairStartTime
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      setRepairStartTime(new Date(now.getTime() - offset).toISOString().slice(0, 16));
       setErrRepairInput('');
       setDrawerType('none');
       alert(`Đã khởi tạo phiếu sửa chữa thành công cho mã ${selectedAssetId}. Trạng thái tài sản tự động chuyển sang BẢO TRÌ.`);
@@ -1115,9 +1124,13 @@ export default function VehicleView({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[11px] font-extrabold text-slate-450 uppercase mb-1.5">Thời gian bắt đầu</label>
-                        <div className="w-full px-3 py-2 bg-slate-950 border border-slate-850 text-slate-500 text-xs rounded-lg select-none">
-                          05/31/2026 05:33 PM
-                        </div>
+                        <input
+                          type="datetime-local"
+                          value={repairStartTime}
+                          onChange={e => setRepairStartTime(e.target.value)}
+                          onClick={e => { try { e.currentTarget.showPicker(); } catch(err) {} }}
+                          className="w-full px-3 py-2 bg-slate-950 border border-slate-850 focus:border-amber-500 text-xs rounded-lg text-slate-100 outline-none cursor-pointer font-mono"
+                        />
                       </div>
                       <div>
                         <label className="block text-[11px] font-extrabold text-slate-450 uppercase mb-1.5">Chi phí ước tính (VND)</label>
@@ -1264,12 +1277,13 @@ export default function VehicleView({
                   <div>
                     <label className="block text-[11.5px] font-extrabold text-slate-450 uppercase mb-1.5">Hạn Đăng Kiểm</label>
                     <div className="relative">
-                      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                       <input
                         type="date"
                         value={formInspectionExpiry}
                         onChange={e => setFormInspectionExpiry(e.target.value)}
-                        className="w-full px-3 py-2.5 pl-3 bg-slate-950 border border-slate-850 focus:border-blue-500 rounded-lg text-slate-100 outline-none font-mono"
+                        onClick={e => { try { e.currentTarget.showPicker(); } catch(err) {} }}
+                        className="w-full px-3 py-2.5 pl-3 bg-slate-950 border border-slate-850 focus:border-blue-500 rounded-lg text-slate-100 outline-none font-mono cursor-pointer"
                       />
                     </div>
                   </div>
@@ -1362,12 +1376,13 @@ export default function VehicleView({
                   <div>
                     <label className="block text-[11.5px] font-extrabold text-slate-450 uppercase mb-1.5">Đăng kiểm hết hạn</label>
                     <div className="relative">
-                      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                      <CalendarDays className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
                       <input
                         type="date"
                         value={formInspectionExpiry}
                         onChange={e => setFormInspectionExpiry(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-850 focus:border-blue-500 rounded-lg text-slate-100 outline-none font-mono"
+                        onClick={e => { try { e.currentTarget.showPicker(); } catch(err) {} }}
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-850 focus:border-blue-500 rounded-lg text-slate-100 outline-none font-mono cursor-pointer"
                       />
                     </div>
                   </div>
