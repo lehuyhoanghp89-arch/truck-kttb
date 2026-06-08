@@ -576,7 +576,7 @@ export default function VehicleView({
             />
           </label>
 
-          {currentUser.role === 'admin' && (
+          {(currentUser.role === 'admin' || currentUser.permission === 'all') && (
             <button
               id="add_new_asset_trigger_btn"
               type="button"

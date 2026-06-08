@@ -361,7 +361,7 @@ export default function TireWarehouseView({
             <ClipboardList className="w-3.5 h-3.5 text-emerald-505" /> {language === 'vi' ? 'Xuất CSV' : 'Export CSV'}
           </button>
 
-          {currentUser.role === 'admin' && (
+          {(currentUser.role === 'admin' || currentUser.permission === 'all') && (
             <label
               id="tire_csv_import_label"
               htmlFor="tire_csv_upload_input"
@@ -386,7 +386,7 @@ export default function TireWarehouseView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left Form: Thêm lốp mới vào kho */}
-        {currentUser.role === 'admin' && (
+        {(currentUser.role === 'admin' || currentUser.permission === 'all') && (
           <div className={`lg:col-span-4 p-5 border rounded-2xl h-fit space-y-4 ${bgCardClass} ${borderClass}`}>
             <h4 className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border-b pb-3 ${
               isDarkMode ? 'text-indigo-400 border-slate-700/50' : 'text-indigo-700 border-slate-205'
@@ -550,7 +550,7 @@ export default function TireWarehouseView({
         )}
 
         {/* Right Spreadsheet Stock Register */}
-        <div className={`space-y-4 ${currentUser.role === 'admin' ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
+        <div className={`space-y-4 ${(currentUser.role === 'admin' || currentUser.permission === 'all') ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
           
           {/* Filters strip */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 select-none">
@@ -711,7 +711,7 @@ export default function TireWarehouseView({
                                 </button>
                               )}
 
-                              {currentUser.role === 'admin' && (
+                              {(currentUser.role === 'admin' || currentUser.permission === 'all') && (
                                 <button
                                   id={`bin_tire_${tire.id}`}
                                   type="button"
