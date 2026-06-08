@@ -155,6 +155,45 @@ export default function TireWarehouseView({
           };
         }).filter(t => t.tire_seri);
 
+        // Check duplicate tire serials
+        const existingTireSeris = new Set(tires.map(t => t.tire_seri.toUpperCase().trim()));
+        const duplicateSerisInDb: string[] = [];
+        const duplicateSerisInFile = new Set<string>();
+        const seenSeris = new Set<string>();
+
+        cleanList.forEach(item => {
+          if (existingTireSeris.has(item.tire_seri)) {
+            duplicateSerisInDb.push(item.tire_seri);
+          }
+          if (seenSeris.has(item.tire_seri)) {
+            duplicateSerisInFile.add(item.tire_seri);
+          }
+          seenSeris.add(item.tire_seri);
+        });
+
+        if (duplicateSerisInDb.length > 0 || duplicateSerisInFile.size > 0) {
+          let errorMsg = language === 'vi' 
+            ? 'Chặn nhập dữ liệu do phát hiện trùng lặp mã lốp (Serial)!\n\n'
+            : 'Import blocked due to duplicate tire Serial keys!\n\n';
+
+          if (duplicateSerisInDb.length > 0) {
+            errorMsg += language === 'vi'
+              ? `- Trùng với lốp đã có trên hệ thống: ${Array.from(new Set(duplicateSerisInDb)).join(', ')}\n`
+              : `- Overlaps with existing tires in stock: ${Array.from(new Set(duplicateSerisInDb)).join(', ')}\n`;
+          }
+          if (duplicateSerisInFile.size > 0) {
+            errorMsg += language === 'vi'
+              ? `- Trùng lặp giữa các dòng trong file CSV vừa chọn: ${Array.from(duplicateSerisInFile).join(', ')}\n`
+              : `- Duplicate rows within chosen CSV file: ${Array.from(duplicateSerisInFile).join(', ')}\n`;
+          }
+          errorMsg += language === 'vi'
+            ? '\nVui lòng kiểm tra và chỉnh sửa lại file CSV trước khi import lại.'
+            : '\nPlease inspect and correct the CSV file before re-importing.';
+
+          alert(errorMsg);
+          return;
+        }
+
         onBulkImportTires(cleanList);
         alert(language === 'vi' 
           ? `Đã nhập dữ liệu hàng loạt thành công ${cleanList.length} lốp vỏ xe vào kho!`

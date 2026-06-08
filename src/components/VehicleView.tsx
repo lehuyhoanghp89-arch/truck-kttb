@@ -215,12 +215,23 @@ export default function VehicleView({
       return;
     }
 
+    const targetIdUpper = formTruckId.trim().toUpperCase();
+
     if (isEditingForm && selectedAssetId) {
       // Find exact record
       const record = trucks.find(t => t.truck_id === selectedAssetId);
       if (record) {
+        // check if targetIdUpper is already used by ANOTHER truck or trailer
+        if (trucks.some(t => t.id !== record.id && t.truck_id.toUpperCase() === targetIdUpper)) {
+          alert(`Mã xe tải "${targetIdUpper}" này đã tồn tại ở một xe khác trong hệ thống!`);
+          return;
+        }
+        if (trailers.some(t => t.trailer_id.toUpperCase() === targetIdUpper)) {
+          alert(`Mã xe tải "${targetIdUpper}" này trùng với mã rơ moóc hiện có!`);
+          return;
+        }
         onEditTruck(record.id, {
-          truck_id: formTruckId,
+          truck_id: targetIdUpper,
           license_plate: formPlate,
           model: formModel,
           status: formStatus,
@@ -230,12 +241,16 @@ export default function VehicleView({
       }
     } else {
       // check duplicates
-      if (trucks.some(t => t.truck_id === formTruckId)) {
-        alert('Mã xe tải này đã tồn tại trong hệ thống!');
+      if (trucks.some(t => t.truck_id.toUpperCase() === targetIdUpper)) {
+        alert(`Mã xe tải "${targetIdUpper}" này đã tồn tại trong hệ thống! Vui lòng nhập mã xe khác.`);
+        return;
+      }
+      if (trailers.some(t => t.trailer_id.toUpperCase() === targetIdUpper)) {
+        alert(`Mã xe tải "${targetIdUpper}" này trùng với mã rơ moóc hiện có trong hệ thống!`);
         return;
       }
       onAddTruck({
-        truck_id: formTruckId,
+        truck_id: targetIdUpper,
         license_plate: formPlate,
         model: formModel,
         status: formStatus,
@@ -256,11 +271,21 @@ export default function VehicleView({
       return;
     }
 
+    const targetIdUpper = formTruckId.trim().toUpperCase();
+
     if (isEditingForm && selectedAssetId) {
       const record = trailers.find(t => t.trailer_id === selectedAssetId);
       if (record) {
+        if (trailers.some(t => t.id !== record.id && t.trailer_id.toUpperCase() === targetIdUpper)) {
+          alert(`Mã rơ moóc "${targetIdUpper}" này đã tồn tại ở một rơ moóc khác trong hệ thống!`);
+          return;
+        }
+        if (trucks.some(t => t.truck_id.toUpperCase() === targetIdUpper)) {
+          alert(`Mã rơ moóc "${targetIdUpper}" này trùng với mã xe tải hiện có!`);
+          return;
+        }
         onEditTrailer(record.id, {
-          trailer_id: formTruckId,
+          trailer_id: targetIdUpper,
           license_plate: formPlate,
           model: formModel,
           status: formTrailerStatus,
@@ -269,12 +294,16 @@ export default function VehicleView({
         });
       }
     } else {
-      if (trailers.some(t => t.trailer_id === formTruckId)) {
-        alert('Mã rơ moóc này đã tồn tại!');
+      if (trailers.some(t => t.trailer_id.toUpperCase() === targetIdUpper)) {
+        alert(`Mã rơ moóc "${targetIdUpper}" này đã tồn tại! Vui lòng nhập mã rơ moóc khác.`);
+        return;
+      }
+      if (trucks.some(t => t.truck_id.toUpperCase() === targetIdUpper)) {
+        alert(`Mã rơ moóc "${targetIdUpper}" này trùng với mã xe tải hiện có trong hệ thống!`);
         return;
       }
       onAddTrailer({
-        trailer_id: formTruckId,
+        trailer_id: targetIdUpper,
         license_plate: formPlate,
         model: formModel,
         status: formTrailerStatus,
@@ -446,7 +475,7 @@ export default function VehicleView({
         if (activeTab === 'trucks') {
           // Normalize status
           const cleanList = importedDataList.map((item, index) => {
-            const truck_id = item.truck_id || item.trailer_id || `TT-NEW-${index + 1}`;
+            const truck_id = (item.truck_id || item.trailer_id || `TT-NEW-${index + 1}`).trim().toUpperCase();
             return {
               truck_id: truck_id,
               license_plate: item.license_plate || 'Chưa gắn',
@@ -460,11 +489,41 @@ export default function VehicleView({
               inspection_notes: ''
             };
           });
+
+          // Check if any truck ID or trailer ID is duplicated
+          const existingTruckIds = new Set(trucks.map(t => t.truck_id.toUpperCase().trim()));
+          const duplicateTruckIdsInDb: string[] = [];
+          const duplicateTruckIdsInFile = new Set<string>();
+          const seenTruckIds = new Set<string>();
+
+          cleanList.forEach(item => {
+            if (existingTruckIds.has(item.truck_id)) {
+              duplicateTruckIdsInDb.push(item.truck_id);
+            }
+            if (seenTruckIds.has(item.truck_id)) {
+              duplicateTruckIdsInFile.add(item.truck_id);
+            }
+            seenTruckIds.add(item.truck_id);
+          });
+
+          if (duplicateTruckIdsInDb.length > 0 || duplicateTruckIdsInFile.size > 0) {
+            let errorMsg = 'Chặn nhập dữ liệu do phát hiện trùng lặp mã xe tải!\n\n';
+            if (duplicateTruckIdsInDb.length > 0) {
+              errorMsg += `- Trùng với xe tải đã có trên hệ thống: ${Array.from(new Set(duplicateTruckIdsInDb)).join(', ')}\n`;
+            }
+            if (duplicateTruckIdsInFile.size > 0) {
+              errorMsg += `- Trùng lặp giữa các dòng trong file CSV vừa chọn: ${Array.from(duplicateTruckIdsInFile).join(', ')}\n`;
+            }
+            errorMsg += '\nVui lòng kiểm tra và chỉnh sửa lại file CSV trước khi import lại.';
+            alert(errorMsg);
+            return;
+          }
+
           onBulkImportTrucks(cleanList);
           alert(`Đã nhập dữ liệu hàng loạt thành công ${cleanList.length} xe tải vào hệ thống.`);
         } else {
           const cleanList = importedDataList.map((item, index) => {
-            const trailer_id = item.trailer_id || item.truck_id || `RM-NEW-${index + 1}`;
+            const trailer_id = (item.trailer_id || item.truck_id || `RM-NEW-${index + 1}`).trim().toUpperCase();
             return {
               trailer_id: trailer_id,
               license_plate: item.license_plate || 'Chưa gắn',
@@ -478,6 +537,36 @@ export default function VehicleView({
               inspection_notes: ''
             };
           });
+
+          // Check duplicates for trailers
+          const existingTrailerIds = new Set(trailers.map(t => t.trailer_id.toUpperCase().trim()));
+          const duplicateTrailerIdsInDb: string[] = [];
+          const duplicateTrailerIdsInFile = new Set<string>();
+          const seenTrailerIds = new Set<string>();
+
+          cleanList.forEach(item => {
+            if (existingTrailerIds.has(item.trailer_id)) {
+              duplicateTrailerIdsInDb.push(item.trailer_id);
+            }
+            if (seenTrailerIds.has(item.trailer_id)) {
+              duplicateTrailerIdsInFile.add(item.trailer_id);
+            }
+            seenTrailerIds.add(item.trailer_id);
+          });
+
+          if (duplicateTrailerIdsInDb.length > 0 || duplicateTrailerIdsInFile.size > 0) {
+            let errorMsg = 'Chặn nhập dữ liệu do phát hiện trùng lặp mã rơ moóc!\n\n';
+            if (duplicateTrailerIdsInDb.length > 0) {
+              errorMsg += `- Trùng với rơ moóc đã có trên hệ thống: ${Array.from(new Set(duplicateTrailerIdsInDb)).join(', ')}\n`;
+            }
+            if (duplicateTrailerIdsInFile.size > 0) {
+              errorMsg += `- Trùng lặp giữa các dòng trong file CSV vừa chọn: ${Array.from(duplicateTrailerIdsInFile).join(', ')}\n`;
+            }
+            errorMsg += '\nVui lòng kiểm tra và chỉnh sửa lại file CSV trước khi import lại.';
+            alert(errorMsg);
+            return;
+          }
+
           onBulkImportTrailers(cleanList);
           alert(`Đã nhập dữ liệu hàng loạt thành công ${cleanList.length} rơ moóc vào hệ thống.`);
         }
