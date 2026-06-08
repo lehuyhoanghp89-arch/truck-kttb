@@ -57,11 +57,31 @@ export default function App() {
       const parsed = JSON.parse(saved) as User;
       const savedUsersList = localStorage.getItem('tt_users_list');
       const latestList = savedUsersList ? (JSON.parse(savedUsersList) as User[]) : [];
-      const matched = latestList.find(u => u.id === parsed.id);
+      const matched = latestList.find(u => u.id === parsed.id || u.email.toLowerCase() === parsed.email.toLowerCase());
       return matched || parsed;
     }
     return null;
   });
+
+  // Keep currentUser in sync with updates in usersList (e.g. role/permission revisions)
+  useEffect(() => {
+    if (currentUser && usersList.length > 0) {
+      const matched = usersList.find(
+        u => u.id === currentUser.id || u.email.toLowerCase() === currentUser.email.toLowerCase()
+      );
+      if (matched) {
+        if (
+          matched.permission !== currentUser.permission ||
+          matched.role !== currentUser.role ||
+          matched.full_name !== currentUser.full_name ||
+          matched.username !== currentUser.username
+        ) {
+          setCurrentUser(matched);
+          localStorage.setItem('tt_current_user', JSON.stringify(matched));
+        }
+      }
+    }
+  }, [usersList, currentUser]);
 
   // Theme control state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -1143,7 +1163,7 @@ export default function App() {
 
   // Guard routing for unauthenticated users
   if (!currentUser) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+    return <LoginView onLoginSuccess={handleLoginSuccess} usersList={usersList} />;
   }
 
   return (

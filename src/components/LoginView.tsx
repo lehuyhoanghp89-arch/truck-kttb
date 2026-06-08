@@ -10,9 +10,10 @@ import { supabase, hasSupabaseConfig } from '../lib/supabase';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
+  usersList?: User[];
 }
 
-export default function LoginView({ onLoginSuccess }: LoginViewProps) {
+export default function LoginView({ onLoginSuccess, usersList = [] }: LoginViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,27 +44,52 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         if (data.user) {
           const emailStr = data.user.email || '';
           const isAdmin = emailStr.toLowerCase() === 'lehuyhoanghp89@gmail.com' || emailStr.toLowerCase().includes('admin');
+          const matchedUser = usersList.find(u => u.id === data.user.id || u.email.toLowerCase() === emailStr.toLowerCase());
+
           onLoginSuccess({
             id: data.user.id,
             email: emailStr,
-            full_name: data.user.user_metadata?.full_name || emailStr.split('@')[0] || 'User',
-            username: data.user.user_metadata?.username || emailStr.split('@')[0] || 'user',
+            full_name: data.user.user_metadata?.full_name || matchedUser?.full_name || emailStr.split('@')[0] || 'User',
+            username: data.user.user_metadata?.username || matchedUser?.username || emailStr.split('@')[0] || 'user',
             password: '', // Never store password in state
-            role: isAdmin ? 'admin' : 'user',
-            permission: isAdmin ? 'all' : 'view'
+            role: matchedUser?.role || (isAdmin ? 'admin' : 'user'),
+            permission: matchedUser?.permission || (isAdmin ? 'all' : 'view')
           });
           return;
         }
       } else {
         // Fallback for when Supabase is not yet configured
+        const matchedLocalUser = usersList.find(
+          u => u.email.toLowerCase() === email.toLowerCase() || u.username.toLowerCase() === email.toLowerCase()
+        );
+
+        if (matchedLocalUser) {
+          if (matchedLocalUser.password && matchedLocalUser.password !== password) {
+            setError('Sai mật khẩu đăng nhập.');
+            setLoading(false);
+            return;
+          }
+          onLoginSuccess({
+            id: matchedLocalUser.id,
+            email: matchedLocalUser.email,
+            full_name: matchedLocalUser.full_name,
+            username: matchedLocalUser.username,
+            password: matchedLocalUser.password || password,
+            role: matchedLocalUser.role,
+            permission: matchedLocalUser.permission
+          });
+          return;
+        }
+
+        const isAdmin = email.includes('admin') || email === 'lehuyhoanghp89@gmail.com';
         onLoginSuccess({
           id: `usr-${Date.now()}`,
           email: email,
           full_name: email.split('@')[0],
           username: email.split('@')[0],
           password: password,
-          role: email.includes('admin') || email === 'lehuyhoanghp89@gmail.com' ? 'admin' : 'user',
-          permission: email.includes('admin') || email === 'lehuyhoanghp89@gmail.com' ? 'all' : 'view'
+          role: isAdmin ? 'admin' : 'user',
+          permission: isAdmin ? 'all' : 'view'
         });
       }
     } catch (err: any) {
