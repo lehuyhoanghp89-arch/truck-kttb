@@ -17,7 +17,8 @@ import {
   Layers,
   Download,
   ClipboardList,
-  Upload
+  Upload,
+  Pencil
 } from 'lucide-react';
 import { Tire, Truck, Trailer, TireLatest } from '../types';
 import { t as translate } from '../i18n';
@@ -30,6 +31,7 @@ interface TireWarehouseViewProps {
   tireLatest: TireLatest[];
   onAddTire: (tire: Omit<Tire, 'id' | 'created_brand' | 'created_date' | 'updated_date' | 'created_by'>) => void;
   onDeleteTire: (id: string) => void;
+  onUpdateTire: (id: string, updated: Partial<Tire>) => void;
   onMountTireToVehicle: (serial: string, assetId: string, position: string) => void;
   onUnmountTireFromVehicle: (serial: string) => void;
   onBulkImportTires: (importList: Omit<Tire, 'id' | 'created_date' | 'updated_date' | 'created_by'>[]) => void;
@@ -45,6 +47,7 @@ export default function TireWarehouseView({
   tireLatest,
   onAddTire,
   onDeleteTire,
+  onUpdateTire,
   onMountTireToVehicle,
   onUnmountTireFromVehicle,
   onBulkImportTires,
@@ -280,6 +283,69 @@ export default function TireWarehouseView({
   const [mountingTireSerial, setMountingTireSerial] = useState<string | null>(null);
   const [targetAssetId, setTargetAssetId] = useState('');
   const [targetPosition, setTargetPosition] = useState('');
+
+  // Editing Dialog overlay states
+  const [editingTire, setEditingTire] = useState<Tire | null>(null);
+  const [editBrand, setEditBrand] = useState('');
+  const [editSize, setEditSize] = useState('');
+  const [editCurrentDepth, setEditCurrentDepth] = useState('');
+  const [editModel, setEditModel] = useState('');
+  const [editStatus, setEditStatus] = useState<'IN_USE' | 'SPARE' | 'DAMAGED' | 'RETIRED'>('SPARE');
+  const [editNotes, setEditNotes] = useState('');
+
+  const handleOpenEditModal = (tire: Tire) => {
+    setEditingTire(tire);
+    setEditBrand(tire.brand || '');
+    setEditSize(tire.size || '');
+    setEditCurrentDepth(String(tire.current_depth || 0));
+    setEditModel(tire.model || 'Standard');
+    setEditStatus(tire.status || 'SPARE');
+    setEditNotes(tire.notes || '');
+  };
+
+  const handleSaveTireEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTire) return;
+
+    const depthVal = parseFloat(editCurrentDepth);
+    if (isNaN(depthVal) || depthVal < 0) {
+      alert(language === 'vi' ? 'Độ sâu gai lốp không hợp lệ!' : 'Invalid tire tread depth!');
+      return;
+    }
+
+    let updatedAssetId = editingTire.asset_id;
+    let updatedAssetType = editingTire.asset_type;
+    let updatedPosition = editingTire.current_position;
+
+    if (editingTire.status === 'IN_USE' && editStatus !== 'IN_USE') {
+      const confirmDeassign = language === 'vi'
+        ? `Lốp đang được lắp ở xe/moóc ${editingTire.asset_id}. Chuyển sang trạng thái "${editStatus}" sẽ tự động tháo lốp khỏi xe. Bạn đồng ý chứ?`
+        : `Tire is currently mounted on ${editingTire.asset_id}. Changing status to "${editStatus}" will automatically unmount it. Proceed?`;
+      if (!confirm(confirmDeassign)) {
+        return;
+      }
+      updatedAssetId = null;
+      updatedAssetType = null;
+      updatedPosition = null;
+
+      onUnmountTireFromVehicle(editingTire.tire_seri);
+    }
+
+    onUpdateTire(editingTire.id, {
+      brand: editBrand,
+      size: editSize,
+      current_depth: depthVal,
+      model: editModel,
+      status: editStatus,
+      notes: editNotes,
+      asset_id: updatedAssetId,
+      asset_type: updatedAssetType,
+      current_position: updatedPosition
+    });
+
+    alert(language === 'vi' ? 'Đã cập nhật thông tin lốp thành công!' : 'Tire information has been updated successfully!');
+    setEditingTire(null);
+  };
 
   // Handle spare tyre registration
   const handleAddNewTire = (e: React.FormEvent) => {
@@ -750,6 +816,22 @@ export default function TireWarehouseView({
                                 </button>
                               )}
 
+                              {(currentUser.role === 'admin' || currentUser.permission === 'all' || currentUser.permission === 'modify') && (
+                                <button
+                                  id={`edit_tire_${tire.id}`}
+                                  type="button"
+                                  onClick={() => handleOpenEditModal(tire)}
+                                  className={`p-1 rounded-md transition-all cursor-pointer ${
+                                    isDarkMode 
+                                      ? 'text-slate-500 hover:text-indigo-400 hover:bg-slate-950' 
+                                      : 'text-slate-550 hover:text-indigo-650 hover:bg-slate-550/10'
+                                  }`}
+                                  title={language === 'vi' ? 'Sửa thông tin lốp' : 'Edit tire'}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
                               {(currentUser.role === 'admin' || currentUser.permission === 'all') && (
                                 <button
                                   id={`bin_tire_${tire.id}`}
@@ -764,7 +846,7 @@ export default function TireWarehouseView({
                                   }}
                                   className={`p-1 rounded-md transition-all cursor-pointer ${
                                     isDarkMode 
-                                      ? 'text-slate-500 hover:text-red-400 hover:bg-slate-950' 
+                                      ? 'text-slate-505 hover:text-red-400 hover:bg-slate-950' 
                                       : 'text-slate-550 hover:text-red-650 hover:bg-slate-50'
                                   }`}
                                 >
@@ -915,6 +997,206 @@ export default function TireWarehouseView({
                   {language === 'vi' ? 'Thoát' : 'Close'}
                 </button>
               </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Edit Tire Information Modal */}
+      {editingTire && (
+        <div id="edit_tire_overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-xs leading-relaxed select-none">
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl space-y-4 font-sans ${
+            isDarkMode ? 'bg-slate-900 border-slate-700/60 text-slate-100' : 'bg-white border-slate-205 text-slate-900'
+          }`}>
+            
+            <div className={`flex justify-between items-start border-b pb-3 ${isDarkMode ? 'border-slate-700/50' : 'border-slate-100'}`}>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                  <Pencil className="w-4 h-4" /> {language === 'vi' ? 'Hiệu chỉnh thông tin vỏ lốp' : 'Edit Tire Details'}
+                </h4>
+                <p className="text-[10.5px] text-slate-500 mt-1">{language === 'vi' ? 'Số Seri cố định:' : 'Fixed Serial Key:'} <span className="font-mono text-indigo-505 dark:text-indigo-400 font-bold">{editingTire.tire_seri}</span></p>
+              </div>
+              <button
+                id="close_edit_tire"
+                type="button"
+                onClick={() => setEditingTire(null)}
+                className={`w-7 h-7 rounded-full border flex items-center justify-center cursor-pointer transition-all ${
+                  isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-450' : 'border-slate-200 hover:bg-slate-100 text-slate-500'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTireEdit} className="space-y-4 text-xs font-sans">
+              
+              <div className="grid grid-cols-2 gap-3">
+                {/* Brand Selection */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Thương hiệu *' : 'Brand *'}
+                  </label>
+                  <select
+                    required
+                    value={editBrand}
+                    onChange={e => setEditBrand(e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-lg outline-none cursor-pointer transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                        : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                    }`}
+                  >
+                    {allAvailableBrands.map(b => (
+                      <option key={b} value={b} className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Size */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Cỡ lốp *' : 'Dimension Size *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editSize}
+                    onChange={e => setEditSize(e.target.value)}
+                    placeholder="12R22.5"
+                    className={`w-full px-3 py-2 border font-mono rounded-lg outline-none transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                        : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* Current Tread Depth */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Độ sâu gai hiện tại (mm) *' : 'Current Tread Depth *'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    value={editCurrentDepth}
+                    onChange={e => setEditCurrentDepth(e.target.value)}
+                    className={`w-full px-3 py-2 border font-mono rounded-lg outline-none transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                        : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                    }`}
+                  />
+                </div>
+
+                {/* Model */}
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Model lốp (Kiểu mẫu)' : 'Tire Model / Pattern'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editModel}
+                    onChange={e => setEditModel(e.target.value)}
+                    placeholder="Standard"
+                    className={`w-full px-3 py-2 border rounded-lg outline-none transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                        : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Status Select */}
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                  {language === 'vi' ? 'Trạng thái hoạt động *' : 'Operational Status *'}
+                </label>
+                <select
+                  required
+                  value={editStatus}
+                  onChange={e => setEditStatus(e.target.value as any)}
+                  className={`w-full px-3 py-2 border rounded-lg outline-none cursor-pointer transition-all ${
+                    isDarkMode 
+                      ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                      : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                  }`}
+                >
+                  <option value="SPARE" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                    {language === 'vi' ? 'SPARE - Dự phòng (Trong kho)' : 'SPARE - Spare Stockpile'}
+                  </option>
+                  <option value="IN_USE" className={isDarkMode ? 'bg-slate-900 text-white' : ''} disabled={editingTire.status !== 'IN_USE'}>
+                    {language === 'vi' ? 'IN_USE - Đang lắp gầm (Chỉ lắp tại sơ đồ)' : 'IN_USE - Active Mounted (Assign on vehicle layout instead)'}
+                  </option>
+                  <option value="DAMAGED" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                    {language === 'vi' ? 'DAMAGED - Hỏng hóc cần sửa' : 'DAMAGED - Damaged'}
+                  </option>
+                  <option value="RETIRED" className={isDarkMode ? 'bg-slate-900 text-white' : ''}>
+                    {language === 'vi' ? 'RETIRED - Thanh lý / Thải loại' : 'RETIRED - Scrapped / Retired'}
+                  </option>
+                </select>
+                {editingTire.status === 'IN_USE' && editStatus !== 'IN_USE' && (
+                  <p className="text-[10px] text-amber-500 font-medium mt-1 leading-normal">
+                    {language === 'vi' 
+                      ? '⚠️ Đổi trạng thái từ Đang lắp sang trạng thái khác sẽ tự động tháo lốp khỏi xe/moóc.' 
+                      : '⚠️ Changing status from IN_USE will automatically unmount the tire from the vehicle.'}
+                  </p>
+                )}
+                {editingTire.status !== 'IN_USE' && (
+                  <p className="text-[10px] text-slate-450 mt-1 leading-normal">
+                    {language === 'vi' 
+                      ? 'Không thể chọn trực tiếp Đang lắp (IN_USE). Vui lòng dùng nút "Gắn lốp" ngoài bảng để lắp gầm.' 
+                      : 'Cannot change directly to IN_USE. Please use the "Mount" button in the table instead.'}
+                  </p>
+                )}
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                  {language === 'vi' ? 'Ghi chú bổ sung' : 'Notes / Remarks'}
+                </label>
+                <textarea
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  placeholder="..."
+                  rows={2}
+                  className={`w-full px-3 py-2 border rounded-lg outline-none transition-all leading-normal ${
+                    isDarkMode 
+                      ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500' 
+                      : 'bg-white border-slate-300 text-slate-900 font-bold focus:border-indigo-500'
+                  }`}
+                />
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-2 select-none flex gap-2">
+                <button
+                  id="confirm_edit_tire_save"
+                  type="submit"
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-505 text-white font-bold rounded-lg cursor-pointer text-center text-xs"
+                >
+                  {language === 'vi' ? 'Lưu chỉnh sửa' : 'Save Changes'}
+                </button>
+                <button
+                  id="cancel_edit_tire"
+                  type="button"
+                  onClick={() => setEditingTire(null)}
+                  className={`flex-1 py-2 border font-semibold rounded-lg text-center text-xs cursor-pointer ${
+                    isDarkMode ? 'bg-slate-950 border-slate-700 text-slate-300 hover:bg-slate-800' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {language === 'vi' ? 'Hủy' : 'Cancel'}
+                </button>
+              </div>
+
             </form>
 
           </div>

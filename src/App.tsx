@@ -938,6 +938,53 @@ export default function App() {
     }
   };
 
+  const handleUpdateTire = (id: string, updatedFields: Partial<Tire>) => {
+    setTires(prev => prev.map(t => {
+      if (t.id === id) {
+        return { 
+          ...t, 
+          ...updatedFields, 
+          updated_date: new Date().toISOString() 
+        };
+      }
+      return t;
+    }));
+
+    const editedTireObj = tires.find(t => t.id === id);
+    if (editedTireObj) {
+      if (updatedFields.current_depth !== undefined) {
+        setTireLatest(prev => prev.map(tl => {
+          if (tl.tire_seri === editedTireObj.tire_seri) {
+            return {
+              ...tl,
+              depth_mm: updatedFields.current_depth!,
+              updated_date: new Date().toISOString()
+            };
+          }
+          return tl;
+        }));
+
+        if (hasSupabaseConfig) {
+          supabase.from(tireLatestTable).update({
+            depth_mm: updatedFields.current_depth,
+            updated_date: new Date().toISOString()
+          }).eq('tire_seri', editedTireObj.tire_seri).then();
+        }
+      }
+    }
+
+    if (hasSupabaseConfig) {
+      const payload = { 
+        ...updatedFields, 
+        updated_date: new Date().toISOString() 
+      };
+      const dbPayload = sanitizeForDb(payload);
+      supabase.from('tires').update(dbPayload).eq('id', id).then(({ error }) => {
+        if (error) console.error("Lỗi cập nhật lốp tires trong database:", error);
+      });
+    }
+  };
+
   // Installation of loose stockpile tyres onto empty vehicle slots
   const handleMountTireToVehicle = (serial: string, assetId: string, position: string) => {
     const targetTireObj = tires.find(t => t.tire_seri === serial);
@@ -1391,6 +1438,7 @@ export default function App() {
             tireLatest={tireLatest}
             onAddTire={handleAddTire}
             onDeleteTire={handleDeleteTire}
+            onUpdateTire={handleUpdateTire}
             onMountTireToVehicle={handleMountTireToVehicle}
             onUnmountTireFromVehicle={handleUnmountTireFromVehicle}
             onBulkImportTires={handleBulkImportTires}
