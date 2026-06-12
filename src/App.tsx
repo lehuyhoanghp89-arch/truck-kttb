@@ -15,7 +15,7 @@ import {
   MaintRequest, 
   RepairLog 
 } from './types';
-import { Menu, X, Sun, Moon, LogOut, Truck as TruckIcon } from 'lucide-react';
+import { Menu, X, Sun, Moon, LogOut, Truck as TruckIcon, AlertCircle, CheckCircle2, Info } from 'lucide-react';
 import { supabase, hasSupabaseConfig } from './lib/supabase';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
@@ -100,6 +100,32 @@ export default function App() {
   // Mobile menu visibility control state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Toast notifications state to bypass browser modal alert popups
+  const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'info' | 'error' }[]>([]);
+
+  const addToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    const id = generateUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 600); // Lightning-fast 600ms (0.6s) auto dismissal as requested
+  };
+
+  useEffect(() => {
+    // Override default blocking window.alert with standard custom toasts
+    window.alert = (message: string) => {
+      if (!message) return;
+      const lower = message.toLowerCase();
+      let type: 'success' | 'info' | 'error' = 'success';
+      if (lower.includes('lỗi') || lower.includes('error') || lower.includes('thất bại') || lower.includes('fail') || lower.includes('không hợp lệ') || lower.includes('invalid')) {
+        type = 'error';
+      } else if (lower.includes('alert') || lower.includes('warning') || lower.includes('chú ý') || lower.includes('xin lưu ý') || lower.includes('vui lòng') || lower.includes('please')) {
+        type = 'info';
+      }
+      addToast(message, type);
+    };
+  }, []);
+
   // Unified Data Entities states with localStorage fallback for durability
   const [trucks, setTrucks] = useState<Truck[]>(() => {
     const saved = localStorage.getItem('tt_trucks');
@@ -144,6 +170,7 @@ export default function App() {
   // Dynamic table column caches for self-healing inserts and updates
   const [trucksColumns, setTrucksColumns] = useState<string[] | null>(null);
   const [trailersColumns, setTrailersColumns] = useState<string[] | null>(null);
+  const [tiresColumns, setTiresColumns] = useState<string[] | null>(null);
 
   // Supabase Initial Load
   useEffect(() => {
@@ -192,7 +219,19 @@ export default function App() {
           console.error('Lỗi khi tải bảng lốp tires:', tiresError);
         } else if (tiresData) {
           console.log(`Đã đồng bộ thành công ${tiresData.length} lốp tires.`);
-          setTires(tiresData as Tire[]);
+          if (tiresData.length > 0) {
+            setTiresColumns(Object.keys(tiresData[0]));
+          }
+          // Normalize tires data to always support both 'position' and 'current_position'
+          const normalized = (tiresData as any[]).map(t => {
+            const pos = t.current_position || t.position || null;
+            return {
+              ...t,
+              position: pos,
+              current_position: pos
+            };
+          });
+          setTires(normalized as Tire[]);
         }
 
         if (logsError) {
@@ -358,6 +397,19 @@ export default function App() {
     }
 
     return result;
+  };
+
+  const getFilteredTiresPayload = (payload: any): any => {
+    if (!tiresColumns || tiresColumns.length === 0) {
+      return payload;
+    }
+    const filteredPayload: any = {};
+    Object.keys(payload).forEach(key => {
+      if (tiresColumns.includes(key)) {
+        filteredPayload[key] = payload[key];
+      }
+    });
+    return filteredPayload;
   };
 
   // Fleet Modification callbacks
@@ -645,11 +697,11 @@ export default function App() {
       setTires(prev => prev.map(t => {
         // Old tire is unattached, becomes loose spare in stock
         if (t.tire_seri === req.old_tire_seri) {
-          return { ...t, asset_id: null, position: null, status: 'SPARE' };
+          return { ...t, asset_id: null, position: null, current_position: null, status: 'SPARE' };
         }
         // New tire is now mounted on this vehicles position
         if (t.tire_seri === req.new_tire_seri) {
-          return { ...t, asset_id: req.asset_id, position: req.position, status: 'IN_USE' };
+          return { ...t, asset_id: req.asset_id, position: req.position, current_position: req.position, status: 'IN_USE' };
         }
         return t;
       }));
@@ -673,10 +725,10 @@ export default function App() {
 
         setTires(prev => prev.map(t => {
           if (t.tire_seri === recordA.tire_seri) {
-            return { ...t, position: req.swap_position };
+            return { ...t, position: req.swap_position, current_position: req.swap_position };
           }
           if (t.tire_seri === recordB.tire_seri) {
-            return { ...t, position: req.position };
+            return { ...t, position: req.position, current_position: req.position };
           }
           return t;
         }));
@@ -694,8 +746,11 @@ export default function App() {
 
       // Synchronize changes to tables in DB
       if (req.request_type === 'REPLACE' && req.new_tire_seri) {
-        supabase.from('tires').update({ asset_id: null, position: null, status: 'SPARE' }).eq('tire_seri', req.old_tire_seri).then();
-        supabase.from('tires').update({ asset_id: req.asset_id, position: req.position, status: 'IN_USE' }).eq('tire_seri', req.new_tire_seri).then();
+        const payloadOld = getFilteredTiresPayload({ asset_id: null, position: null, current_position: null, status: 'SPARE' });
+        supabase.from('tires').update(payloadOld).eq('tire_seri', req.old_tire_seri).then();
+
+        const payloadNew = getFilteredTiresPayload({ asset_id: req.asset_id, position: req.position, current_position: req.position, status: 'IN_USE' });
+        supabase.from('tires').update(payloadNew).eq('tire_seri', req.new_tire_seri).then();
 
         const wt = tires.find(wt => wt.tire_seri === req.new_tire_seri);
         supabase.from(tireLatestTable).update({
@@ -723,8 +778,11 @@ export default function App() {
             status: recordA.status
           }).eq('asset_id', req.asset_id).eq('position', req.swap_position).then();
 
-          supabase.from('tires').update({ position: req.swap_position }).eq('tire_seri', recordA.tire_seri).then();
-          supabase.from('tires').update({ position: req.position }).eq('tire_seri', recordB.tire_seri).then();
+          const payloadSwapA = getFilteredTiresPayload({ position: req.swap_position, current_position: req.swap_position });
+          supabase.from('tires').update(payloadSwapA).eq('tire_seri', recordA.tire_seri).then();
+
+          const payloadSwapB = getFilteredTiresPayload({ position: req.position, current_position: req.position });
+          supabase.from('tires').update(payloadSwapB).eq('tire_seri', recordB.tire_seri).then();
         }
       }
     }
@@ -846,7 +904,7 @@ export default function App() {
       return [...filteredNew, ...prev];
     });
     if (hasSupabaseConfig) {
-      const sanitizedList = list.map(item => sanitizeForDb(item));
+      const sanitizedList = list.map(item => getFilteredTiresPayload(sanitizeForDb(item)));
       supabase.from('tires').insert(sanitizedList).then(({ error }) => {
         if (error) console.error("Lỗi khi import vỏ lốp tires:", error);
       });
@@ -899,7 +957,8 @@ export default function App() {
       });
       
       // 2. Update current depth in tires inventory
-      supabase.from('tires').update({ current_depth: newMeasure.depth_mm }).eq('tire_seri', newMeasure.tire_seri).then();
+      const payloadTire = getFilteredTiresPayload({ current_depth: newMeasure.depth_mm });
+      supabase.from('tires').update(payloadTire).eq('tire_seri', newMeasure.tire_seri).then();
 
       // 3. Update current live trackers
       supabase.from(tireLatestTable).update({
@@ -922,7 +981,7 @@ export default function App() {
     };
     setTires(prev => [item, ...prev]);
     if (hasSupabaseConfig) {
-      const dbItem = sanitizeForDb(item);
+      const dbItem = getFilteredTiresPayload(sanitizeForDb(item));
       supabase.from('tires').insert([dbItem]).then(({ error }) => {
         if (error) console.error("Lỗi thêm vỏ lốp tires vào Supabase:", error);
       });
@@ -939,11 +998,23 @@ export default function App() {
   };
 
   const handleUpdateTire = (id: string, updatedFields: Partial<Tire>) => {
+    // Sync both position and current_position in state changes
+    const fieldsAny = updatedFields as any;
+    const normalizedFields: any = { ...updatedFields };
+    if (fieldsAny.current_position !== undefined) {
+      normalizedFields.position = fieldsAny.current_position;
+      normalizedFields.current_position = fieldsAny.current_position;
+    }
+    if (fieldsAny.position !== undefined) {
+      normalizedFields.position = fieldsAny.position;
+      normalizedFields.current_position = fieldsAny.position;
+    }
+
     setTires(prev => prev.map(t => {
       if (t.id === id) {
         return { 
           ...t, 
-          ...updatedFields, 
+          ...normalizedFields, 
           updated_date: new Date().toISOString() 
         };
       }
@@ -952,12 +1023,12 @@ export default function App() {
 
     const editedTireObj = tires.find(t => t.id === id);
     if (editedTireObj) {
-      if (updatedFields.current_depth !== undefined) {
+      if (normalizedFields.current_depth !== undefined) {
         setTireLatest(prev => prev.map(tl => {
           if (tl.tire_seri === editedTireObj.tire_seri) {
             return {
               ...tl,
-              depth_mm: updatedFields.current_depth!,
+              depth_mm: normalizedFields.current_depth!,
               updated_date: new Date().toISOString()
             };
           }
@@ -966,7 +1037,7 @@ export default function App() {
 
         if (hasSupabaseConfig) {
           supabase.from(tireLatestTable).update({
-            depth_mm: updatedFields.current_depth,
+            depth_mm: normalizedFields.current_depth,
             updated_date: new Date().toISOString()
           }).eq('tire_seri', editedTireObj.tire_seri).then();
         }
@@ -974,11 +1045,11 @@ export default function App() {
     }
 
     if (hasSupabaseConfig) {
-      const payload = { 
-        ...updatedFields, 
+      const payload: any = { 
+        ...normalizedFields, 
         updated_date: new Date().toISOString() 
       };
-      const dbPayload = sanitizeForDb(payload);
+      const dbPayload = getFilteredTiresPayload(sanitizeForDb(payload));
       supabase.from('tires').update(dbPayload).eq('id', id).then(({ error }) => {
         if (error) console.error("Lỗi cập nhật lốp tires trong database:", error);
       });
@@ -993,7 +1064,7 @@ export default function App() {
     // 1) Mark tire status inside central warehouse state as mounted
     setTires(prev => prev.map(t => {
       if (t.tire_seri === serial) {
-        return { ...t, asset_id: assetId, position: position, status: 'IN_USE' };
+        return { ...t, asset_id: assetId, position: position, current_position: position, status: 'IN_USE' };
       }
       return t;
     }));
@@ -1024,7 +1095,14 @@ export default function App() {
           status: 'OK',
           last_updated: new Date().toISOString(),
           measured_by: currentUser?.full_name || 'Gắn viên'
-        }).eq('asset_id', assetId).eq('position', position).then();
+        }).eq('asset_id', assetId).eq('position', position).then(({ error }) => {
+          if (error) {
+            console.error(`Lỗi cập nhật sơ đồ lốp ${tireLatestTable}:`, error);
+            alert(language === 'vi'
+              ? `Lỗi Supabase khi cập nhật sơ đồ lốp: ${error.message}\n(Chi tiết: kiểm tra phân quyền RLS)`
+              : `Supabase error updating tire layout: ${error.message}\n(Detail: check RLS policies)`);
+          }
+        });
       }
     } else {
       // Create new skeleton entry
@@ -1047,14 +1125,30 @@ export default function App() {
       if (hasSupabaseConfig) {
         const dbSlot = sanitizeForDb(newLiveSlot);
         supabase.from(tireLatestTable).insert([dbSlot]).then(({ error }) => {
-          if (error) console.error(`Lỗi chèn live slot vào bảng ${tireLatestTable}:`, error);
+          if (error) {
+            console.error(`Lỗi chèn live slot vào bảng ${tireLatestTable}:`, error);
+            alert(language === 'vi'
+              ? `Lỗi Supabase khi tạo vị trí lắp lốp mới: ${error.message}`
+              : `Supabase error creating tire layout slot: ${error.message}`);
+          }
         });
       }
     }
 
     if (hasSupabaseConfig) {
-      supabase.from('tires').update({ asset_id: assetId, position: position, status: 'IN_USE' }).eq('tire_seri', serial).then(({ error }) => {
-        if (error) console.error("Lỗi cập nhật lốp trong kho thành IN_USE:", error);
+      const payloadTire = getFilteredTiresPayload({
+        asset_id: assetId,
+        position: position,
+        current_position: position,
+        status: 'IN_USE'
+      });
+      supabase.from('tires').update(payloadTire).eq('tire_seri', serial).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi cập nhật lốp trong kho thành IN_USE:", error);
+          alert(language === 'vi'
+            ? `Lỗi Supabase khi liên kết lốp kho sang IN_USE: ${error.message}`
+            : `Supabase error linking tire to IN_USE: ${error.message}`);
+        }
       });
     }
   };
@@ -1064,12 +1158,14 @@ export default function App() {
     const target = tires.find(t => t.tire_seri === serial);
     if (!target) return;
 
-    const { asset_id, position } = target;
+    // Support both position and current_position keys
+    const asset_id = target.asset_id;
+    const position = target.current_position || target.position;
 
     // 1) Clear link on general warehouse tires array
     setTires(prev => prev.map(t => {
       if (t.tire_seri === serial) {
-        return { ...t, asset_id: null, position: null, status: 'SPARE' };
+        return { ...t, asset_id: null, position: null, current_position: null, status: 'SPARE' };
       }
       return t;
     }));
@@ -1080,12 +1176,28 @@ export default function App() {
     }
 
     if (hasSupabaseConfig) {
-      supabase.from('tires').update({ asset_id: null, position: null, status: 'SPARE' }).eq('tire_seri', serial).then(({ error }) => {
-        if (error) console.error("Lỗi tháo lốp khỏi xe trên Supabase:", error);
+      const payloadTire = getFilteredTiresPayload({
+        asset_id: null,
+        position: null,
+        current_position: null,
+        status: 'SPARE'
+      });
+      supabase.from('tires').update(payloadTire).eq('tire_seri', serial).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi tháo lốp khỏi xe trên Supabase:", error);
+          alert(language === 'vi'
+            ? `Lỗi Supabase khi tháo lốp kho: ${error.message}`
+            : `Supabase error unmounting warehouse tire: ${error.message}`);
+        }
       });
       if (asset_id && position) {
         supabase.from(tireLatestTable).delete().eq('asset_id', asset_id).eq('position', position).then(({ error }) => {
-          if (error) console.error(`Lỗi xóa live slot trên bảng ${tireLatestTable}:`, error);
+          if (error) {
+            console.error(`Lỗi xóa live slot trên bảng ${tireLatestTable}:`, error);
+            alert(language === 'vi'
+              ? `Lỗi Supabase khi xóa sơ đồ lắp đặt: ${error.message}`
+              : `Supabase error removing tire layout slot: ${error.message}`);
+          }
         });
       }
     }
@@ -1108,6 +1220,7 @@ export default function App() {
           ...t, 
           asset_id: null, 
           position: null, 
+          current_position: null,
           status: 'DAMAGED', 
           notes: `${t.notes || ''} [BÁO HỎNG: ${damageCause}]`.trim() 
         };
@@ -1118,6 +1231,7 @@ export default function App() {
           ...t,
           asset_id: assetId,
           position: position,
+          current_position: position,
           status: 'IN_USE'
         };
       }
@@ -1163,18 +1277,32 @@ export default function App() {
     setMaintRequests(prev => [newMaint, ...prev]);
 
     if (hasSupabaseConfig) {
-      supabase.from('tires').update({
+      const payloadOld = getFilteredTiresPayload({
         asset_id: null,
         position: null,
+        current_position: null,
         status: 'DAMAGED',
         notes: `[BÁO HỎNG: ${damageCause}]`
-      }).eq('tire_seri', damagedSeri).then();
+      });
+      supabase.from('tires').update(payloadOld).eq('tire_seri', damagedSeri).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi cập nhật lốp hỏng on Supabase:", error);
+          alert(language === 'vi' ? `Lỗi Supabase khi báo hỏng lốp: ${error.message}` : `Supabase error marking tire as damaged: ${error.message}`);
+        }
+      });
 
-      supabase.from('tires').update({
+      const payloadNew = getFilteredTiresPayload({
         asset_id: assetId,
         position: position,
+        current_position: position,
         status: 'IN_USE'
-      }).eq('tire_seri', replacementSeri).then();
+      });
+      supabase.from('tires').update(payloadNew).eq('tire_seri', replacementSeri).then(({ error }) => {
+        if (error) {
+          console.error("Lỗi lắp lốp thay thế on Supabase:", error);
+          alert(language === 'vi' ? `Lỗi Supabase khi gắn lốp dự phòng: ${error.message}` : `Supabase error mounting backup tire: ${error.message}`);
+        }
+      });
 
       supabase.from(tireLatestTable).update({
         tire_seri: replacementSeri,
@@ -1459,6 +1587,33 @@ export default function App() {
         )}
 
       </main>
+
+      {/* Floating dynamic non-blocking Toasts portal */}
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[10050] flex flex-col gap-2 max-w-sm sm:max-w-md w-full px-4 pointer-events-none select-none">
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            className={`flex items-center gap-3 p-3.5 rounded-2xl shadow-2xl transition-all duration-300 animate-toast pointer-events-auto border backdrop-blur-md ${
+              t.type === 'error'
+                ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                : t.type === 'info'
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+            }`}
+          >
+            {t.type === 'error' ? (
+              <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-500" />
+            ) : t.type === 'info' ? (
+              <Info className="w-5 h-5 flex-shrink-0 text-amber-500" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-500" />
+            )}
+            <p className={`text-[13px] font-sans font-medium flex-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+              {t.message}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
