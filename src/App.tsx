@@ -112,8 +112,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Override default blocking window.alert with standard custom toasts
-    window.alert = (message: string) => {
+    /* eslint-disable no-global-assign */
+    // @ts-ignore
+    (window as any).alert = (message: string) => {
       if (!message) return;
       const lower = message.toLowerCase();
       let type: 'success' | 'info' | 'error' = 'success';
@@ -124,6 +125,7 @@ export default function App() {
       }
       addToast(message, type);
     };
+    /* eslint-enable no-global-assign */
   }, []);
 
   // Unified Data Entities states with localStorage fallback for durability
