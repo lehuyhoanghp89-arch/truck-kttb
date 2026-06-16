@@ -106,9 +106,12 @@ export default function App() {
   const addToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     const id = generateUUID();
     setToasts(prev => [...prev, { id, message, type }]);
+    
+    // Set auto-dismissal time based on severity: 8s for errors, 4.5s for warnings/info, 3s for success
+    const duration = type === 'error' ? 8000 : type === 'info' ? 4500 : 3000;
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 600); // Lightning-fast 600ms (0.6s) auto dismissal as requested
+    }, duration);
   };
 
   useEffect(() => {
@@ -467,7 +470,7 @@ export default function App() {
   const handleEditTruck = (id: string, updated: Partial<Truck>) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      let payload: any = { ...updated, updated_date: new Date().toISOString() };
+      let payload: any = sanitizeForDb({ ...updated, updated_date: new Date().toISOString() });
       if (trucksColumns && trucksColumns.length > 0) {
         const filteredPayload: any = {};
         Object.keys(payload).forEach(key => {
@@ -565,7 +568,7 @@ export default function App() {
   const handleEditTrailer = (id: string, updated: Partial<Trailer>) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, ...updated, updated_date: new Date().toISOString() } : t));
     if (hasSupabaseConfig) {
-      let payload: any = { ...updated, updated_date: new Date().toISOString() };
+      let payload: any = sanitizeForDb({ ...updated, updated_date: new Date().toISOString() });
       if (trailersColumns && trailersColumns.length > 0) {
         const filteredPayload: any = {};
         Object.keys(payload).forEach(key => {
@@ -806,7 +809,8 @@ export default function App() {
   const handleEditTruckExpiry = (id: string, targetDate: string) => {
     setTrucks(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
     if (hasSupabaseConfig) {
-      supabase.from('trucks').update({ inspection_expiry: targetDate }).eq('id', id).then(({ error }) => {
+      const payload = sanitizeForDb({ inspection_expiry: targetDate });
+      supabase.from('trucks').update(payload).eq('id', id).then(({ error }) => {
         if (error) console.error("Lỗi cập nhật kiểm định xe trucks:", error);
       });
     }
@@ -815,7 +819,8 @@ export default function App() {
   const handleEditTrailerExpiry = (id: string, targetDate: string) => {
     setTrailers(prev => prev.map(t => t.id === id ? { ...t, inspection_expiry: targetDate } : t));
     if (hasSupabaseConfig) {
-      supabase.from('trailers').update({ inspection_expiry: targetDate }).eq('id', id).then(({ error }) => {
+      const payload = sanitizeForDb({ inspection_expiry: targetDate });
+      supabase.from('trailers').update(payload).eq('id', id).then(({ error }) => {
         if (error) console.error("Lỗi cập nhật kiểm định trailers:", error);
       });
     }
@@ -1591,16 +1596,17 @@ export default function App() {
       </main>
 
       {/* Floating dynamic non-blocking Toasts portal */}
-      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[10050] flex flex-col gap-2 max-w-sm sm:max-w-md w-full px-4 pointer-events-none select-none">
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[10050] flex flex-col gap-2 max-w-sm sm:max-w-md w-full px-4 pointer-events-none">
         {toasts.map(t => (
           <div
             key={t.id}
-            className={`flex items-center gap-3 p-3.5 rounded-2xl shadow-2xl transition-all duration-300 animate-toast pointer-events-auto border backdrop-blur-md ${
+            onClick={() => setToasts(prev => prev.filter(item => item.id !== t.id))}
+            className={`flex items-center gap-3 p-3.5 rounded-2xl shadow-2xl transition-all duration-300 animate-toast pointer-events-auto border backdrop-blur-md cursor-pointer select-text hover:scale-[1.01] active:scale-[0.99] ${
               t.type === 'error'
-                ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
                 : t.type === 'info'
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
             }`}
           >
             {t.type === 'error' ? (
@@ -1613,6 +1619,7 @@ export default function App() {
             <p className={`text-[13px] font-sans font-medium flex-1 ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
               {t.message}
             </p>
+            <X className="w-4 h-4 flex-shrink-0 opacity-40 hover:opacity-100 transition-opacity" />
           </div>
         ))}
       </div>
