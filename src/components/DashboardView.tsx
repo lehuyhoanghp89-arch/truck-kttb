@@ -41,8 +41,8 @@ export default function DashboardView({
 
   // Current Date display string (Language dependent)
   const dateStr = language === 'vi' 
-    ? 'Thứ Tư, ngày 03 tháng 06, 2026' 
-    : 'Wednesday, June 3rd, 2026';
+    ? new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    : new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   // Compute status counts of tires
   const okCount = tireLatest.filter(t => t.status === 'OK').length;

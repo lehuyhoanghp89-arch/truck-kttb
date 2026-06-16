@@ -63,8 +63,9 @@ export default function AlertView({
   // Our static current mockup is Wednesday, June 3rd, 2026.
   // We suppose any tire whose last measure date is before May 3rd, 2026 is overdue.
   const overdueWarnings = tireLatest.filter(t => {
-    const cutoffDate = new Date('2026-05-03T00:00:00Z');
-    const measuredDate = t.last_updated ? new Date(t.last_updated) : new Date('2026-04-01T00:00:00Z');
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 30);
+    const measuredDate = t.last_updated ? new Date(t.last_updated) : new Date(Date.now() - 45*24*60*60*1000);
     return measuredDate.getTime() < cutoffDate.getTime();
   });
 
@@ -296,7 +297,7 @@ export default function AlertView({
                       </td>
                       <td className="p-4 text-center">
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-500/10 border border-amber-500/20 text-amber-500 uppercase">
-                          Quá hạn {Math.floor((new Date('2026-06-03').getTime() - (warn.last_updated ? new Date(warn.last_updated).getTime() : new Date('2026-04-15').getTime())) / (1000 * 300 * 200 * 24))} ngày
+                          Quá hạn {Math.floor((new Date().getTime() - (warn.last_updated ? new Date(warn.last_updated).getTime() : new Date().getTime() - 45*24*60*60*1000)) / (1000 * 60 * 60 * 24))} ngày
                         </span>
                       </td>
                       <td className="p-4 text-right">

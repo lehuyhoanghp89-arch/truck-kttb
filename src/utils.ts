@@ -78,8 +78,7 @@ export function getInspectionStatus(expiryDateStr: string | null | undefined): {
   }
   
   // Current date (normalized to midnight)
-  // Let's use the actual local time 2026-06-03 or user current date
-  const now = new Date('2026-06-03T00:00:00Z');
+  const now = new Date();
   now.setUTCHours(0, 0, 0, 0);
   
   const diffTime = expiryDate.getTime() - now.getTime();

@@ -60,7 +60,7 @@ export default function TireMeasureView({
   // Input results sidebar drawer states
   const [selectedPosition, setSelectedPosition] = useState<string | null>(null);
   const [depthInput, setDepthInput] = useState('');
-  const [measuredAt, setMeasuredAt] = useState('2026-06-05');
+  const [measuredAt, setMeasuredAt] = useState(() => new Date().toISOString().split('T')[0]);
   const [measureNotes, setMeasureNotes] = useState('');
   const [errInput, setErrInput] = useState('');
 
