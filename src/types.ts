@@ -39,6 +39,7 @@ export interface Tire {
   updated_date: string;
   created_by: string;
   tire_seri: string; // Duy nhất
+  port_serial?: string; // Mã quản lý riêng của cảng, bắt đầu bằng chữ P
   model: string;
   brand: string;
   size: string; // VD: 295/80R22.5

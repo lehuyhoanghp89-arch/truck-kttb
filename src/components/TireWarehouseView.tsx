@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Tire, Truck, Trailer, TireLatest } from '../types';
 import { t as translate } from '../i18n';
-import { parseCsv, exportToCsv, triggerCsvDownload } from '../utils';
+import { parseCsv, exportToCsv, triggerCsvDownload, generatePortSerial } from '../utils';
 
 interface TireWarehouseViewProps {
   tires: Tire[];
@@ -212,6 +212,7 @@ export default function TireWarehouseView({
 
   // Inputs for creating spare tyre
   const [newSerial, setNewSerial] = useState('');
+  const [noMfgSerial, setNoMfgSerial] = useState(false);
   
   // Dynamic brand list states
   const [brands, setBrands] = useState<string[]>(() => {
@@ -286,6 +287,8 @@ export default function TireWarehouseView({
 
   // Editing Dialog overlay states
   const [editingTire, setEditingTire] = useState<Tire | null>(null);
+  const [editTireSeri, setEditTireSeri] = useState('');
+  const [editPortSerial, setEditPortSerial] = useState('');
   const [editBrand, setEditBrand] = useState('');
   const [editSize, setEditSize] = useState('');
   const [editCurrentDepth, setEditCurrentDepth] = useState('');
@@ -295,6 +298,8 @@ export default function TireWarehouseView({
 
   const handleOpenEditModal = (tire: Tire) => {
     setEditingTire(tire);
+    setEditTireSeri(tire.tire_seri || '');
+    setEditPortSerial(tire.port_serial || '');
     setEditBrand(tire.brand || '');
     setEditSize(tire.size || '');
     setEditCurrentDepth(String(tire.current_depth || 0));
@@ -311,6 +316,19 @@ export default function TireWarehouseView({
     if (isNaN(depthVal) || depthVal < 0) {
       alert(language === 'vi' ? 'Độ sâu gai lốp không hợp lệ!' : 'Invalid tire tread depth!');
       return;
+    }
+
+    const cleanTireSeri = editTireSeri.toUpperCase().trim();
+    if (!cleanTireSeri) {
+      alert(language === 'vi' ? 'Vui lòng điền mã định danh lốp!' : 'Please input tire serial!');
+      return;
+    }
+
+    if (cleanTireSeri !== editingTire.tire_seri) {
+      if (tires.some(t => t.id !== editingTire.id && t.tire_seri.toUpperCase() === cleanTireSeri)) {
+        alert(language === 'vi' ? 'Số Seri lốp này đã tồn tại trong hệ thống!' : 'This tire serial already exists in the system!');
+        return;
+      }
     }
 
     let updatedAssetId = editingTire.asset_id;
@@ -332,6 +350,8 @@ export default function TireWarehouseView({
     }
 
     onUpdateTire(editingTire.id, {
+      tire_seri: cleanTireSeri,
+      port_serial: editPortSerial || undefined,
       brand: editBrand,
       size: editSize,
       current_depth: depthVal,
@@ -347,22 +367,38 @@ export default function TireWarehouseView({
     setEditingTire(null);
   };
 
+  const handleIssuePortSerial = () => {
+    const nextPortSerial = generatePortSerial(tires);
+    setEditPortSerial(nextPortSerial);
+    alert(language === 'vi' 
+      ? `Đã cấp phát Mã Cảng: ${nextPortSerial} cho lốp này. Vui lòng nhấn "Lưu chỉnh sửa" để hoàn chỉnh.`
+      : `Successfully issued Port Serial: ${nextPortSerial}. Please click "Save Changes" to finalize.`
+    );
+  };
+
   // Handle spare tyre registration
   const handleAddNewTire = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSerial.trim()) {
+    if (!newSerial.trim() && !noMfgSerial) {
       alert(language === 'vi' ? 'Vui lòng điền mã định danh lốp (Serial Number)' : 'Please input tire Serial Number');
       return;
     }
 
+    // Generate Port Serial starting with 'P'
+    const nextPortSerial = generatePortSerial(tires);
+
+    // If missing manufacturer serial, use nextPortSerial as both
+    const finalTireSeri = noMfgSerial ? nextPortSerial : newSerial.toUpperCase().trim();
+
     // Is there duplicate?
-    if (tires.some(t => t.tire_seri.toUpperCase() === newSerial.toUpperCase())) {
+    if (tires.some(t => t.tire_seri.toUpperCase() === finalTireSeri.toUpperCase())) {
       alert(language === 'vi' ? 'Số Seri lốp này đã tồn tại trong kho!' : 'This Serial Number already exists in stock!');
       return;
     }
 
     onAddTire({
-      tire_seri: newSerial.toUpperCase(),
+      tire_seri: finalTireSeri,
+      port_serial: nextPortSerial,
       brand: newBrand,
       size: newSize,
       model: 'Standard',
@@ -376,11 +412,12 @@ export default function TireWarehouseView({
     });
 
     alert(language === 'vi' 
-      ? `Đã nhập kho lốp dự trữ mới Seri ${newSerial} thành công.`
-      : `Successfully registered new spare tire Seri ${newSerial} in stock.`
+      ? `Đã nhập kho lốp dự trữ mới thành công!\n- Seri NSX: ${noMfgSerial ? 'Chưa có (sẽ bổ sung sau)' : finalTireSeri}\n- Seri Cảng (quản lý riêng): ${nextPortSerial}`
+      : `Successfully registered new spare tire!\n- Mfg Serial: ${noMfgSerial ? 'None (add later)' : finalTireSeri}\n- Port Serial (custom): ${nextPortSerial}`
     );
     setNewSerial('');
     setNewNotes('');
+    setNoMfgSerial(false);
   };
 
   const handleOpenMountingModal = (serial: string) => {
@@ -409,6 +446,7 @@ export default function TireWarehouseView({
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q || 
       t.tire_seri.toLowerCase().includes(q) ||
+      (t.port_serial && t.port_serial.toLowerCase().includes(q)) ||
       t.brand.toLowerCase().includes(q) ||
       t.size.toLowerCase().includes(q);
 
@@ -502,20 +540,41 @@ export default function TireWarehouseView({
             <form onSubmit={handleAddNewTire} className="space-y-4 text-xs leading-normal font-sans">
               <div>
                 <label className={`block text-[11px] uppercase mb-1.5 ${labelTextContrast}`}>
-                  {language === 'vi' ? 'Mã định danh lốp (Seri) *' : 'Tire Serial Key *'}
+                  {language === 'vi' ? 'Mã định danh lốp (Seri NSX) *' : 'Tire Serial Key (Mfg) *'}
                 </label>
                 <input
                   type="text"
-                  required
-                  value={newSerial}
+                  required={!noMfgSerial}
+                  disabled={noMfgSerial}
+                  value={noMfgSerial ? (language === 'vi' ? 'TỰ ĐỘNG SINH MÃ CẢNG' : 'AUTO PORT SERIAL') : newSerial}
                   onChange={e => setNewSerial(e.target.value.toUpperCase())}
                   placeholder="VD: SN-123456789"
                   className={`w-full px-3 py-2 border rounded-lg outline-none font-mono text-xs transition-all ${
+                    noMfgSerial ? 'opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-900' : ''
+                  } ${
                     isDarkMode 
                       ? 'bg-slate-950 border-slate-700/65 text-slate-100 focus:border-indigo-505 placeholder:text-slate-700' 
                       : 'bg-white border-slate-300 text-slate-900 focus:border-indigo-500 placeholder:text-slate-400 font-bold'
                   }`}
                 />
+                <label className="flex items-start gap-2 mt-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={noMfgSerial}
+                    onChange={e => {
+                      setNoMfgSerial(e.target.checked);
+                      if (e.target.checked) {
+                        setNewSerial('');
+                      }
+                    }}
+                    className="w-3.5 h-3.5 mt-0.5 accent-indigo-600 rounded"
+                  />
+                  <span className={`text-[10.5px] font-medium leading-tight ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {language === 'vi' 
+                      ? 'Không lấy được mã định danh của nhà sản xuất (mất tem/bị mòn)' 
+                      : 'Manufacturer serial is unavailable / missing'}
+                  </span>
+                </label>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pb-2">
@@ -747,7 +806,25 @@ export default function TireWarehouseView({
                         >
                           {/* Serial */}
                           <td className="p-3 font-mono font-extrabold text-indigo-650 dark:text-indigo-400">
-                            {tire.tire_seri}
+                            {tire.tire_seri === tire.port_serial ? (
+                              <div className="space-y-0.5">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-500 font-sans uppercase">
+                                  {language === 'vi' ? 'Mất/Mòn Seri NSX' : 'Missing Mfg Serial'}
+                                </span>
+                                <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
+                                  {tire.port_serial} <span className="text-[9.5px] font-sans font-medium text-indigo-500">({language === 'vi' ? 'Mã Cảng' : 'Port ID'})</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <div className="text-indigo-650 dark:text-indigo-400">{tire.tire_seri}</div>
+                                {tire.port_serial && (
+                                  <div className="text-[10.5px] font-sans font-medium text-slate-500 dark:text-slate-400">
+                                    {language === 'vi' ? 'Seri Cảng: ' : 'Port ID: '}<span className="font-mono font-bold text-slate-700 dark:text-slate-300">{tire.port_serial}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           {/* Brand */}
@@ -1031,6 +1108,52 @@ export default function TireWarehouseView({
 
             <form onSubmit={handleSaveTireEdit} className="space-y-4 text-xs font-sans">
               
+              {/* Serial & Port Serial Management Row */}
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800">
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Mã Seri NSX *' : 'Mfg Serial Key *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editTireSeri}
+                    onChange={e => setEditTireSeri(e.target.value.toUpperCase())}
+                    className={`w-full px-3 py-2 border rounded-lg outline-none transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-indigo-500 font-mono font-bold' 
+                        : 'bg-white border-slate-300 text-slate-900 font-extrabold focus:border-indigo-500 font-mono'
+                    }`}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[11px] font-extrabold uppercase mb-1.5 text-slate-400">
+                    {language === 'vi' ? 'Mã Quản Lý Cảng *' : 'Port Serial *'}
+                  </label>
+                  {editPortSerial ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={editPortSerial}
+                      className={`w-full px-3 py-2 border rounded-lg outline-none font-mono font-bold opacity-75 ${
+                        isDarkMode 
+                          ? 'bg-slate-800 border-slate-700 text-slate-450' 
+                          : 'bg-slate-100 border-slate-300 text-slate-500'
+                      }`}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleIssuePortSerial}
+                      className="w-full px-3 py-1.5 mt-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg cursor-pointer text-[11px] transition-all"
+                    >
+                      {language === 'vi' ? 'Cấp phát Mã Cảng' : 'Issue Port Serial'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 {/* Brand Selection */}
                 <div>

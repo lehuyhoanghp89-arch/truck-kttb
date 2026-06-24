@@ -473,30 +473,62 @@ export default function TireMeasureView({
               <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-slate-900/40 border-slate-700/50' : 'bg-white border-slate-200'}`}>
                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2 block">Thông số chi tiết</h4>
                 
-                {selectedPosition ? (
-                  <div className="space-y-3 pt-2 text-xs leading-relaxed">
-                    <div className="p-3 bg-blue-900/10 border border-blue-500/15 rounded-xl">
-                      <span className="font-extrabold text-blue-400 block text-sm uppercase">Lốp {getDisplayPosition(selectedPosition)}</span>
-                      <span className="text-[10px] text-slate-500 block leading-tight mt-1 font-mono">
-                        {tireLatest.find(t => t.asset_id === selectedAssetId && t.position === selectedPosition)?.tire_seri || 'Chưa gắn lốp mã định danh'}
-                      </span>
-                    </div>
+                {selectedPosition ? (() => {
+                  const currentWheelTireLatest = tireLatest.find(
+                    t => t.asset_id === selectedAssetId && t.position === selectedPosition
+                  );
+                  const matchedTire = currentWheelTireLatest ? tires.find(t => t.tire_seri === currentWheelTireLatest.tire_seri) : null;
+                  return (
+                    <div className="space-y-3 pt-2 text-xs leading-relaxed">
+                      <div className="p-3 bg-blue-900/10 border border-blue-500/15 rounded-xl">
+                        <span className="font-extrabold text-blue-400 block text-sm uppercase">Lốp {getDisplayPosition(selectedPosition)}</span>
+                        {currentWheelTireLatest ? (
+                          <div className="mt-1 space-y-0.5 font-mono">
+                            {matchedTire && matchedTire.tire_seri === matchedTire.port_serial ? (
+                              <>
+                                <span className="inline-block px-1.5 py-0.5 text-[9px] bg-amber-500/15 border border-amber-500/20 text-amber-500 font-sans uppercase font-bold rounded mb-1">
+                                  {language === 'vi' ? 'Mất/Mòn Seri NSX' : 'Missing Mfg Serial'}
+                                </span>
+                                <span className="text-[11px] font-bold text-slate-100 block">
+                                  {matchedTire.port_serial} <span className="text-[9.5px] font-sans font-medium text-indigo-400">({language === 'vi' ? 'Mã Cảng' : 'Port ID'})</span>
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-xs font-bold text-slate-100 block">
+                                  {currentWheelTireLatest.tire_seri}
+                                </span>
+                                {matchedTire && matchedTire.port_serial && (
+                                  <span className="text-[10px] text-slate-400 block font-sans mt-0.5">
+                                    {language === 'vi' ? 'Seri Cảng: ' : 'Port ID: '}<span className="font-mono font-bold text-slate-300">{matchedTire.port_serial}</span>
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 block leading-tight mt-1 font-mono">
+                            {language === 'vi' ? 'Chưa gắn lốp mã định danh' : 'Unmounted position'}
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex justify-between border-b border-slate-700/30 pb-2">
-                      <span className="text-slate-500 font-medium">Chiều sâu gai cũ:</span>
-                      <span className="font-extrabold text-slate-300 font-mono">
-                        {tireLatest.find(t => t.asset_id === selectedAssetId && t.position === selectedPosition)?.depth_mm || 0} mm
-                      </span>
-                    </div>
+                      <div className="flex justify-between border-b border-slate-700/30 pb-2">
+                        <span className="text-slate-500 font-medium">{language === 'vi' ? 'Chiều sâu gai cũ:' : 'Last depth:'}</span>
+                        <span className="font-extrabold text-slate-300 font-mono">
+                          {currentWheelTireLatest?.depth_mm || 0} mm
+                        </span>
+                      </div>
 
-                    <div className="flex justify-between pb-2 border-b border-slate-700/30">
-                      <span className="text-slate-500 font-medium">Nhân viên sửa cuối:</span>
-                      <span className="font-extrabold text-slate-450">
-                        {tireLatest.find(t => t.asset_id === selectedAssetId && t.position === selectedPosition)?.measured_by || 'Hoàng Lê Huy'}
-                      </span>
+                      <div className="flex justify-between pb-2 border-b border-slate-700/30">
+                        <span className="text-slate-500 font-medium">{language === 'vi' ? 'Nhân viên sửa cuối:' : 'Last measured by:'}</span>
+                        <span className="font-extrabold text-slate-450">
+                          {currentWheelTireLatest?.measured_by || 'Hoàng Lê Huy'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div className="text-slate-500 text-xs py-4 leading-normal">
                     Hãy nhấp chọn một lốp trên sơ đồ để xem thông số và ghi số liệu đo lốp mới.
                   </div>

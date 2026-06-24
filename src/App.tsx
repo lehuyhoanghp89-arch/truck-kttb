@@ -225,7 +225,11 @@ export default function App() {
         } else if (tiresData) {
           console.log(`Đã đồng bộ thành công ${tiresData.length} lốp tires.`);
           if (tiresData.length > 0) {
-            setTiresColumns(Object.keys(tiresData[0]));
+            const cols = Object.keys(tiresData[0]);
+            if (!cols.includes('port_serial')) {
+              cols.push('port_serial');
+            }
+            setTiresColumns(cols);
           }
           // Normalize tires data to always support both 'position' and 'current_position'
           const normalized = (tiresData as any[]).map(t => {
@@ -1030,6 +1034,26 @@ export default function App() {
 
     const editedTireObj = tires.find(t => t.id === id);
     if (editedTireObj) {
+      if (normalizedFields.tire_seri !== undefined && normalizedFields.tire_seri !== editedTireObj.tire_seri) {
+        setTireLatest(prev => prev.map(tl => {
+          if (tl.tire_seri === editedTireObj.tire_seri) {
+            return {
+              ...tl,
+              tire_seri: normalizedFields.tire_seri,
+              updated_date: new Date().toISOString()
+            };
+          }
+          return tl;
+        }));
+
+        if (hasSupabaseConfig) {
+          supabase.from(tireLatestTable).update({
+            tire_seri: normalizedFields.tire_seri,
+            updated_date: new Date().toISOString()
+          }).eq('tire_seri', editedTireObj.tire_seri).then();
+        }
+      }
+
       if (normalizedFields.current_depth !== undefined) {
         setTireLatest(prev => prev.map(tl => {
           if (tl.tire_seri === editedTireObj.tire_seri) {

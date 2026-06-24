@@ -110,3 +110,23 @@ export function getTireStatus(depth: number, asset_type: 'TRUCK' | 'TRAILER' | n
     return 'OK';
   }
 }
+
+/**
+ * Generate a sequential port serial starting with 'P' (e.g., P10001, P10002, etc.)
+ * based on the highest existing serial.
+ */
+export function generatePortSerial(existingTires: any[]): string {
+  let maxNum = 10000;
+  if (Array.isArray(existingTires)) {
+    existingTires.forEach(t => {
+      if (t && t.port_serial && typeof t.port_serial === 'string' && t.port_serial.startsWith('P')) {
+        const numPart = t.port_serial.substring(1);
+        const parsed = parseInt(numPart, 10);
+        if (!isNaN(parsed) && parsed > maxNum) {
+          maxNum = parsed;
+        }
+      }
+    });
+  }
+  return `P${maxNum + 1}`;
+}
