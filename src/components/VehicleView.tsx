@@ -22,7 +22,13 @@ import {
   Info,
   Check,
   Download,
-  Upload
+  Upload,
+  LayoutGrid,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { Truck, Trailer, Tire, TireLatest, RepairLog, MaintRequest } from '../types';
 import { getInspectionStatus, getTireStatus, exportToCsv, parseCsv, triggerCsvDownload } from '../utils';
@@ -78,8 +84,16 @@ export default function VehicleView({
   // Trailer subtabs: 'all', 'active', 'spare', 'maintenance'
   const [trailerSubTab, setTrailerSubTab] = useState<'all' | 'active' | 'spare' | 'maintenance'>('all');
   
-  // Search query
+  // View mode: 'grid' (cards) or 'list' (table)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  // Search query for vehicles
   const [searchQuery, setSearchQuery] = useState('');
+  // Search query for attaching spare trailer in drawer
+  const [attachSearchQuery, setAttachSearchQuery] = useState('');
 
   // Right-hand Side drawer states
   const [drawerType, setDrawerType] = useState<'none' | 'diagram' | 'attach_trailer' | 'repair_logs' | 'form_truck' | 'form_trailer'>('none');
@@ -143,6 +157,7 @@ export default function VehicleView({
   // Open attach trailer drawer
   const openAttachTrailerDrawer = (truckId: string) => {
     setSelectedAssetId(truckId);
+    setAttachSearchQuery('');
     setDrawerType('attach_trailer');
   };
 
@@ -609,6 +624,43 @@ export default function VehicleView({
 
   // Fetch spare list of trailers
   const spareTrailers = trailers.filter(t => t.status === 'SPARE');
+  
+  // Filter spare trailers for attach modal search
+  const filteredSpareTrailers = spareTrailers.filter(t => {
+    const q = attachSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.trailer_id.toLowerCase().includes(q) ||
+      t.license_plate.toLowerCase().includes(q) ||
+      (t.model && t.model.toLowerCase().includes(q))
+    );
+  }).sort((a, b) => a.trailer_id.localeCompare(b.trailer_id, undefined, { numeric: true, sensitivity: 'base' }));
+
+  // Pagination logic
+  const currentTotal = activeTab === 'trucks' ? filteredTrucks.length : filteredTrailers.length;
+  const totalPages = Math.max(1, Math.ceil(currentTotal / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, currentTotal);
+
+  const paginatedTrucks = filteredTrucks.slice(startIndex, endIndex);
+  const paginatedTrailers = filteredTrailers.slice(startIndex, endIndex);
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (safePage <= 4) {
+        pages.push(1, 2, 3, 4, 5, '...', totalPages);
+      } else if (safePage >= totalPages - 3) {
+        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', safePage - 1, safePage, safePage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
 
   return (
     <div className={`space-y-6 ${isDarkMode ? 'text-slate-105' : 'text-slate-800'}`}>
@@ -682,21 +734,79 @@ export default function VehicleView({
         </div>
       </div>
 
-      {/* Searching Bar (Matches Image 4) */}
-      <div id="veh_search_row" className="relative max-w-md">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
-        <input
-          id="vehicle_search_box"
-          type="text"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Tìm theo mã xe, biển số, kiểu mẫu..."
-          className={`w-full pl-11 pr-4 py-2.5 text-sm rounded-xl outline-none border transition-all ${
-            isDarkMode 
-              ? 'bg-slate-950 border-slate-850 text-slate-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10' 
-              : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10'
-          }`}
-        />
+      {/* Search & View Mode Switcher Row */}
+      <div id="veh_search_row" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
+          <input
+            id="vehicle_search_box"
+            type="text"
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder={language === 'vi' ? 'Tìm theo mã xe, biển số, kiểu mẫu...' : 'Search by vehicle ID, plate, model...'}
+            className={`w-full pl-11 pr-10 py-2.5 text-sm rounded-xl outline-none border transition-all ${
+              isDarkMode 
+                ? 'bg-slate-950 border-slate-850 text-slate-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10' 
+                : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10'
+            }`}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setCurrentPage(1);
+              }}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+              title="Xóa tìm kiếm"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* View Mode Switcher (Dạng thẻ / Dạng danh sách) */}
+        <div className="flex items-center gap-2 select-none self-end sm:self-auto">
+          <div className={`flex items-center p-1 rounded-xl border ${
+            isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-100 border-slate-200'
+          }`}>
+            <button
+              id="view_mode_grid_btn"
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDarkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Xem dạng thẻ"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>{language === 'vi' ? 'Dạng thẻ' : 'Grid'}</span>
+            </button>
+            <button
+              id="view_mode_list_btn"
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDarkMode
+                    ? 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Xem dạng danh sách"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>{language === 'vi' ? 'Dạng danh sách' : 'List'}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Main Tabs switcher (Matches Image 4 & 5 Tab layouts) */}
@@ -707,6 +817,7 @@ export default function VehicleView({
           onClick={() => {
             setActiveTab('trucks');
             setSearchQuery('');
+            setCurrentPage(1);
           }}
           className={`px-6 py-3 font-semibold text-sm transition-all focus:outline-none cursor-pointer border-b-2 flex items-center gap-2 ${
             activeTab === 'trucks'
@@ -723,6 +834,7 @@ export default function VehicleView({
           onClick={() => {
             setActiveTab('trailers');
             setSearchQuery('');
+            setCurrentPage(1);
           }}
           className={`px-6 py-3 font-semibold text-sm transition-all focus:outline-none cursor-pointer border-b-2 flex items-center gap-2 ${
             activeTab === 'trailers'
@@ -743,7 +855,10 @@ export default function VehicleView({
               id={`trailer_sub_tab_${sub}`}
               key={sub}
               type="button"
-              onClick={() => setTrailerSubTab(sub)}
+              onClick={() => {
+                setTrailerSubTab(sub);
+                setCurrentPage(1);
+              }}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold capitalize transition-all cursor-pointer ${
                 trailerSubTab === sub
                   ? 'bg-blue-600 text-white font-bold'
@@ -758,276 +873,695 @@ export default function VehicleView({
         </div>
       )}
 
-      {/* Main Grid Dataset Displays */}
-      <div id="vehicle_cards_grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        
-        {/* Render Trucks list */}
-        {activeTab === 'trucks' && filteredTrucks.map(truck => {
-          const hasTrailer = !!truck.attached_trailer_id;
-          
-          return (
-            <div 
-              id={`truck_card_${truck.truck_id}`}
-              key={truck.id}
-              className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-300 ${
-                isDarkMode 
-                  ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
-                  : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
-              }`}
+      {/* Empty State */}
+      {currentTotal === 0 ? (
+        <div className={`p-12 text-center rounded-2xl border border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-500' : 'border-slate-300 bg-slate-50 text-slate-500'}`}>
+          <TruckIcon className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="font-bold text-sm text-slate-400">
+            {language === 'vi' ? 'Không tìm thấy phương tiện nào phù hợp' : 'No matching vehicles found'}
+          </p>
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setCurrentPage(1);
+              }}
+              className="mt-3 text-xs text-indigo-400 hover:underline font-bold cursor-pointer"
             >
-              {/* Card top */}
-              <div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-base font-extrabold tracking-wide text-blue-500 font-mono">
-                      {truck.truck_id}
-                    </h4>
-                    <span className="text-xs text-slate-500 font-mono tracking-wider">
-                      {truck.license_plate}
+              {language === 'vi' ? 'Xóa từ khóa tìm kiếm' : 'Clear search query'}
+            </button>
+          )}
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* Main Grid Dataset Displays */
+        <div id="vehicle_cards_grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Render Trucks Cards */}
+          {activeTab === 'trucks' && paginatedTrucks.map(truck => {
+            const hasTrailer = !!truck.attached_trailer_id;
+            
+            return (
+              <div 
+                id={`truck_card_${truck.truck_id}`}
+                key={truck.id}
+                className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-300 ${
+                  isDarkMode 
+                    ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
+                    : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
+                }`}
+              >
+                {/* Card top */}
+                <div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-base font-extrabold tracking-wide text-blue-500 font-mono">
+                        {truck.truck_id}
+                      </h4>
+                      <span className="text-xs text-slate-500 font-mono tracking-wider">
+                        {truck.license_plate}
+                      </span>
+                      <div className="text-xs font-semibold text-slate-400 mt-1">
+                        {truck.model}
+                      </div>
+                    </div>
+                    
+                    {/* Status Badge */}
+                    <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                      truck.status === 'ACTIVE'
+                        ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400 font-black'
+                        : truck.status === 'MAINTENANCE'
+                          ? 'bg-amber-500/15 border-amber-500/20 text-amber-400 font-black'
+                          : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
+                    }`}>
+                      {truck.status === 'ACTIVE' ? 'Hoạt động' : truck.status === 'MAINTENANCE' ? 'Bảo trì' : 'Ngưng'}
                     </span>
-                    <div className="text-xs font-semibold text-slate-400 mt-1">
-                      {truck.model}
+                  </div>
+
+                  {/* Sub info links without registration (inspection) details */}
+                  <div className="mt-4 pt-3 border-t border-dashed border-slate-800/10 dark:border-slate-850/40 space-y-1.5 text-xs text-slate-400 font-sans">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-medium">Trailer đính kèm:</span>
+                      {hasTrailer ? (
+                        <span className="text-blue-504 font-extrabold font-mono">{truck.attached_trailer_id}</span>
+                      ) : (
+                        <span className="text-slate-600 italic">Chưa gắn moóc</span>
+                      )}
                     </div>
                   </div>
-                  
-                  {/* Status Badge */}
-                  <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
-                    truck.status === 'ACTIVE'
-                      ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400 font-black'
-                      : truck.status === 'MAINTENANCE'
-                        ? 'bg-amber-500/15 border-amber-500/20 text-amber-400 font-black'
-                        : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
-                  }`}>
-                    {truck.status === 'ACTIVE' ? 'Hoạt động' : truck.status === 'MAINTENANCE' ? 'Bảo trì' : 'Ngưng'}
-                  </span>
                 </div>
 
-                {/* Sub info links without registration (inspection) details */}
-                <div className="mt-4 pt-3 border-t border-dashed border-slate-800/10 dark:border-slate-850/40 space-y-1.5 text-xs text-slate-400 font-sans">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Trailer đính kèm:</span>
-                    {hasTrailer ? (
-                      <span className="text-blue-504 font-extrabold font-mono">{truck.attached_trailer_id}</span>
-                    ) : (
-                      <span className="text-slate-600 italic">Chưa gắn moóc</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Compact, high contrast actions row */}
-              <div className="mt-4 pt-3 flex items-center justify-between gap-1.5 border-t border-slate-800/10 dark:border-slate-850/30 select-none">
-                <button
-                  id={`btn_truck_diagram_${truck.truck_id}`}
-                  type="button"
-                  onClick={() => openTireDiagram(truck.truck_id, 'TRUCK')}
-                  className="flex-1 py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-505/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer text-center flex items-center justify-center gap-1 transition-all"
-                  title="Xem sơ đồ vị trí lốp"
-                >
-                  <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
-                </button>
-
-                {hasTrailer ? (
+                {/* Compact, high contrast actions row */}
+                <div className="mt-4 pt-3 flex items-center justify-between gap-1.5 border-t border-slate-800/10 dark:border-slate-850/30 select-none">
                   <button
-                    id={`btn_truck_detach_${truck.truck_id}`}
+                    id={`btn_truck_diagram_${truck.truck_id}`}
+                    type="button"
+                    onClick={() => openTireDiagram(truck.truck_id, 'TRUCK')}
+                    className="flex-1 py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-505/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer text-center flex items-center justify-center gap-1 transition-all"
+                    title="Xem sơ đồ vị trí lốp"
+                  >
+                    <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
+                  </button>
+
+                  {hasTrailer ? (
+                    <button
+                      id={`btn_truck_detach_${truck.truck_id}`}
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Bạn chắc chắn muốn tháo rơ moóc ${truck.attached_trailer_id} khỏi xe ${truck.truck_id}?`)) {
+                          onDetachTrailer(truck.truck_id);
+                        }
+                      }}
+                      className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                        isDarkMode 
+                          ? 'bg-rose-950/15 hover:bg-rose-950/35 text-rose-400 border-rose-500/20' 
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 shadow-2xs'
+                      }`}
+                      title={`Tháo moóc ${truck.attached_trailer_id}`}
+                    >
+                      <Unlink className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      id={`btn_truck_attach_${truck.truck_id}`}
+                      type="button"
+                      onClick={() => openAttachTrailerDrawer(truck.truck_id)}
+                      className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                        isDarkMode 
+                          ? 'bg-emerald-950/15 hover:bg-emerald-950/35 text-emerald-400 border-emerald-500/20' 
+                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-2xs'
+                      }`}
+                      title="Gắn moóc"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <button
+                    id={`btn_truck_repair_${truck.truck_id}`}
+                    type="button"
+                    onClick={() => openRepairLogsDrawer(truck.truck_id, 'TRUCK')}
+                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-700 shadow-2xs'
+                    }`}
+                    title="Nhật ký Sửa chữa (Cờ lê)"
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    id={`btn_truck_edit_${truck.truck_id}`}
+                    type="button"
+                    onClick={() => openTruckForm(truck)}
+                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-slate-450 hover:text-white'
+                        : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755 shadow-2xs'
+                    }`}
+                    title="Sửa thông tin"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    id={`btn_truck_delete_${truck.truck_id}`}
                     type="button"
                     onClick={() => {
-                      if (confirm(`Bạn chắc chắn muốn tháo rơ moóc ${truck.attached_trailer_id} khỏi xe ${truck.truck_id}?`)) {
-                        onDetachTrailer(truck.truck_id);
+                      if (confirm(`Bạn chắc chắn muốn xóa xe tải ${truck.truck_id} vĩnh viễn khỏi cơ sở dữ liệu?`)) {
+                        onDeleteTruck(truck.id);
                       }
                     }}
                     className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                      isDarkMode 
-                        ? 'bg-rose-950/15 hover:bg-rose-950/35 text-rose-400 border-rose-500/20' 
-                        : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 shadow-2xs'
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
+                        : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-700 shadow-2xs'
                     }`}
-                    title={`Tháo moóc ${truck.attached_trailer_id}`}
+                    title="Xoá xe"
                   >
-                    <Unlink className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                ) : (
-                  <button
-                    id={`btn_truck_attach_${truck.truck_id}`}
-                    type="button"
-                    onClick={() => openAttachTrailerDrawer(truck.truck_id)}
-                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                      isDarkMode 
-                        ? 'bg-emerald-950/15 hover:bg-emerald-950/35 text-emerald-400 border-emerald-500/20' 
-                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-2xs'
-                    }`}
-                    title="Gắn moóc"
-                  >
-                    <LinkIcon className="w-3.5 h-3.5" />
-                  </button>
-                )}
-
-                <button
-                  id={`btn_truck_repair_${truck.truck_id}`}
-                  type="button"
-                  onClick={() => openRepairLogsDrawer(truck.truck_id, 'TRUCK')}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-700 shadow-2xs'
-                  }`}
-                  title="Nhật ký Sửa chữa (Cờ lê)"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  id={`btn_truck_edit_${truck.truck_id}`}
-                  type="button"
-                  onClick={() => openTruckForm(truck)}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 text-slate-450 hover:text-white'
-                      : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755 shadow-2xs'
-                  }`}
-                  title="Sửa thông tin"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  id={`btn_truck_delete_${truck.truck_id}`}
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Bạn chắc chắn muốn xóa xe tải ${truck.truck_id} vĩnh viễn khỏi cơ sở dữ liệu?`)) {
-                      onDeleteTruck(truck.id);
-                    }
-                  }}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
-                      : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-700 shadow-2xs'
-                  }`}
-                  title="Xoá xe"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {/* Render Trailers listings (Matches Image 5 Card layouts) */}
-        {activeTab === 'trailers' && filteredTrailers.map(trailer => {
-          const hasTruck = !!trailer.attached_truck_id;
+          {/* Render Trailers listings (Matches Image 5 Card layouts) */}
+          {activeTab === 'trailers' && paginatedTrailers.map(trailer => {
+            const hasTruck = !!trailer.attached_truck_id;
 
-          return (
-            <div 
-              id={`trailer_card_${trailer.trailer_id}`}
-              key={trailer.id}
-              className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-305 ${
-                isDarkMode 
-                  ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
-                  : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
-              }`}
-            >
-              {/* Card top */}
-              <div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-base font-extrabold tracking-wide text-blue-500 font-mono">
-                      {trailer.trailer_id}
-                    </h4>
-                    <span className="text-xs text-slate-500 font-mono tracking-wider">
-                      {trailer.license_plate}
+            return (
+              <div 
+                id={`trailer_card_${trailer.trailer_id}`}
+                key={trailer.id}
+                className={`border rounded-2xl p-4.5 flex flex-col justify-between hover:shadow-lg hover:-translate-y-[0.5px] transition-all duration-305 ${
+                  isDarkMode 
+                    ? 'bg-slate-900/40 border-slate-700/50 hover:border-indigo-500/50' 
+                    : 'bg-white border-slate-150 hover:border-slate-250 shadow-xs'
+                }`}
+              >
+                {/* Card top */}
+                <div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-base font-extrabold tracking-wide text-blue-500 font-mono">
+                        {trailer.trailer_id}
+                      </h4>
+                      <span className="text-xs text-slate-500 font-mono tracking-wider">
+                        {trailer.license_plate}
+                      </span>
+                      <div className="text-xs font-semibold text-slate-400 mt-1">
+                        {trailer.model}
+                      </div>
+                    </div>
+
+                    {/* Status badge */}
+                    <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                      trailer.status === 'ACTIVE'
+                        ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400 font-black'
+                        : trailer.status === 'SPARE'
+                          ? 'bg-blue-500/15 border-blue-500/20 text-blue-400 font-black'
+                          : trailer.status === 'MAINTENANCE'
+                            ? 'bg-amber-500/15 border-amber-500/20 text-amber-400 font-black'
+                            : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
+                    }`}>
+                      {trailer.status === 'ACTIVE' ? 'Đang kéo' : trailer.status === 'SPARE' ? 'Dự phòng' : trailer.status === 'MAINTENANCE' ? 'Đang sửa' : 'Ngưng'}
                     </span>
-                    <div className="text-xs font-semibold text-slate-400 mt-1">
-                      {trailer.model}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-dashed border-slate-800/10 dark:border-slate-850/40 space-y-1.5 text-xs text-slate-400 font-sans">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 font-medium">Xe tải kéo:</span>
+                      {hasTruck ? (
+                        <span className="text-blue-504 font-extrabold font-mono">{trailer.attached_truck_id}</span>
+                      ) : (
+                        <span className="text-slate-600 italic">Đang ở bãi</span>
+                      )}
                     </div>
                   </div>
-
-                  {/* Status badge */}
-                  <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
-                    trailer.status === 'ACTIVE'
-                      ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400 font-black'
-                      : trailer.status === 'SPARE'
-                        ? 'bg-blue-500/15 border-blue-500/20 text-blue-400 font-black'
-                        : trailer.status === 'MAINTENANCE'
-                          ? 'bg-amber-500/15 border-amber-500/20 text-amber-400 font-black'
-                          : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
-                  }`}>
-                    {trailer.status === 'ACTIVE' ? 'Đang kéo' : trailer.status === 'SPARE' ? 'Dự phòng' : trailer.status === 'MAINTENANCE' ? 'Đang sửa' : 'Ngưng'}
-                  </span>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-dashed border-slate-800/10 dark:border-slate-850/40 space-y-1.5 text-xs text-slate-400 font-sans">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-medium">Xe tải kéo:</span>
-                    {hasTruck ? (
-                      <span className="text-blue-504 font-extrabold font-mono">{trailer.attached_truck_id}</span>
-                    ) : (
-                      <span className="text-slate-600 italic">Đang ở bãi</span>
-                    )}
-                  </div>
+                {/* Compact Actions row for Trailer */}
+                <div className="mt-4 pt-3 flex items-center justify-between gap-1.5 border-t border-slate-800/10 dark:border-slate-850/30 select-none">
+                  <button
+                    id={`btn_trailer_diagram_${trailer.trailer_id}`}
+                    type="button"
+                    onClick={() => openTireDiagram(trailer.trailer_id, 'TRAILER')}
+                    className="flex-1 py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-505/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer text-center flex items-center justify-center gap-1 transition-all"
+                    title="Xem sơ đồ vị trí lốp"
+                  >
+                    <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
+                  </button>
+
+                  <button
+                    id={`btn_trailer_repair_${trailer.trailer_id}`}
+                    type="button"
+                    onClick={() => openRepairLogsDrawer(trailer.trailer_id, 'TRAILER')}
+                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-705 shadow-2xs'
+                    }`}
+                    title="Nhật ký Sửa chữa (Cờ lê)"
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    id={`btn_trailer_edit_${trailer.trailer_id}`}
+                    type="button"
+                    onClick={() => openTrailerForm(trailer)}
+                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 text-slate-455 hover:text-white'
+                        : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755 shadow-2xs'
+                    }`}
+                    title="Sửa thông tin"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    id={`btn_trailer_delete_${trailer.trailer_id}`}
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Bạn chắc chắn muốn xóa rơ moóc ${trailer.trailer_id} khỏi bãi?`)) {
+                        onDeleteTrailer(trailer.id);
+                      }
+                    }}
+                    className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
+                      isDarkMode
+                        ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
+                        : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-705 shadow-2xs'
+                    }`}
+                    title="Xoá moóc"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Main List / Table Dataset Displays */
+        <div>
+          {activeTab === 'trucks' ? (
+            <div className={`overflow-x-auto rounded-2xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'} shadow-xs`}>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/60 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'} text-[11px] font-black uppercase tracking-wider`}>
+                    <th className="py-3.5 px-4">Mã xe</th>
+                    <th className="py-3.5 px-4">Biển số</th>
+                    <th className="py-3.5 px-4">Kiểu / Model</th>
+                    <th className="py-3.5 px-4">Trạng thái</th>
+                    <th className="py-3.5 px-4">Trailer đính kèm</th>
+                    <th className="py-3.5 px-4 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60 text-slate-300' : 'divide-slate-150 text-slate-700'}`}>
+                  {paginatedTrucks.map(truck => {
+                    const hasTrailer = !!truck.attached_trailer_id;
+                    return (
+                      <tr 
+                        id={`truck_row_${truck.truck_id}`}
+                        key={truck.id} 
+                        className={`transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/80'}`}
+                      >
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono font-extrabold text-blue-500 text-sm">{truck.truck_id}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {truck.license_plate}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-600 dark:text-slate-400">
+                          {truck.model || '—'}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                            truck.status === 'ACTIVE'
+                              ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400'
+                              : truck.status === 'MAINTENANCE'
+                                ? 'bg-amber-500/15 border-amber-500/20 text-amber-400'
+                                : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
+                          }`}>
+                            {truck.status === 'ACTIVE' ? 'Hoạt động' : truck.status === 'MAINTENANCE' ? 'Bảo trì' : 'Ngưng'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {hasTrailer ? (
+                            <span className="font-mono font-extrabold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md">
+                              {truck.attached_trailer_id}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Chưa gắn moóc</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5 select-none">
+                            <button
+                              id={`btn_truck_diagram_list_${truck.truck_id}`}
+                              type="button"
+                              onClick={() => openTireDiagram(truck.truck_id, 'TRUCK')}
+                              className="py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer flex items-center gap-1 transition-all"
+                              title="Xem sơ đồ vị trí lốp"
+                            >
+                              <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
+                            </button>
 
-              {/* Compact Actions row for Trailer */}
-              <div className="mt-4 pt-3 flex items-center justify-between gap-1.5 border-t border-slate-800/10 dark:border-slate-850/30 select-none">
-                <button
-                  id={`btn_trailer_diagram_${trailer.trailer_id}`}
-                  type="button"
-                  onClick={() => openTireDiagram(trailer.trailer_id, 'TRAILER')}
-                  className="flex-1 py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-505/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer text-center flex items-center justify-center gap-1 transition-all"
-                  title="Xem sơ đồ vị trí lốp"
-                >
-                  <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
-                </button>
+                            {hasTrailer ? (
+                              <button
+                                id={`btn_truck_detach_list_${truck.truck_id}`}
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`Bạn chắc chắn muốn tháo rơ moóc ${truck.attached_trailer_id} khỏi xe ${truck.truck_id}?`)) {
+                                    onDetachTrailer(truck.truck_id);
+                                  }
+                                }}
+                                className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-rose-950/15 hover:bg-rose-950/35 text-rose-400 border-rose-500/20' 
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                }`}
+                                title={`Tháo moóc ${truck.attached_trailer_id}`}
+                              >
+                                <Unlink className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                id={`btn_truck_attach_list_${truck.truck_id}`}
+                                type="button"
+                                onClick={() => openAttachTrailerDrawer(truck.truck_id)}
+                                className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                  isDarkMode 
+                                    ? 'bg-emerald-950/15 hover:bg-emerald-950/35 text-emerald-400 border-emerald-500/20' 
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                }`}
+                                title="Gắn moóc"
+                              >
+                                <LinkIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
-                <button
-                  id={`btn_trailer_repair_${trailer.trailer_id}`}
-                  type="button"
-                  onClick={() => openRepairLogsDrawer(trailer.trailer_id, 'TRAILER')}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-705 shadow-2xs'
-                  }`}
-                  title="Nhật ký Sửa chữa (Cờ lê)"
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                </button>
+                            <button
+                              id={`btn_truck_repair_list_${truck.truck_id}`}
+                              type="button"
+                              onClick={() => openRepairLogsDrawer(truck.truck_id, 'TRUCK')}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                                  ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-700'
+                              }`}
+                              title="Nhật ký Sửa chữa (Cờ lê)"
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                            </button>
 
-                <button
-                  id={`btn_trailer_edit_${trailer.trailer_id}`}
-                  type="button"
-                  onClick={() => openTrailerForm(trailer)}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 text-slate-455 hover:text-white'
-                      : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755 shadow-2xs'
-                  }`}
-                  title="Sửa thông tin"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
+                            <button
+                              id={`btn_truck_edit_list_${truck.truck_id}`}
+                              type="button"
+                              onClick={() => openTruckForm(truck)}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                                  ? 'bg-slate-950 border-slate-800 text-slate-450 hover:text-white'
+                                  : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755'
+                              }`}
+                              title="Sửa thông tin"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
 
-                <button
-                  id={`btn_trailer_delete_${trailer.trailer_id}`}
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Bạn chắc chắn muốn xóa rơ moóc ${trailer.trailer_id} khỏi bãi?`)) {
-                      onDeleteTrailer(trailer.id);
-                    }
-                  }}
-                  className={`p-2 rounded-lg border cursor-pointer text-center flex items-center justify-center transition-all ${
-                    isDarkMode
-                      ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
-                      : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-705 shadow-2xs'
-                  }`}
-                  title="Xoá moóc"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                            <button
+                              id={`btn_truck_delete_list_${truck.truck_id}`}
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Bạn chắc chắn muốn xóa xe tải ${truck.truck_id} vĩnh viễn khỏi cơ sở dữ liệu?`)) {
+                                  onDeleteTruck(truck.id);
+                                }
+                              }}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                              ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
+                              : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-700'
+                              }`}
+                              title="Xoá xe"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          );
-        })}
-      </div>
+          ) : (
+            <div className={`overflow-x-auto rounded-2xl border ${isDarkMode ? 'border-slate-800 bg-slate-900/40' : 'border-slate-200 bg-white'} shadow-xs`}>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/60 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-600'} text-[11px] font-black uppercase tracking-wider`}>
+                    <th className="py-3.5 px-4">Mã moóc</th>
+                    <th className="py-3.5 px-4">Biển số</th>
+                    <th className="py-3.5 px-4">Kiểu / Model</th>
+                    <th className="py-3.5 px-4">Trạng thái</th>
+                    <th className="py-3.5 px-4">Xe tải kéo</th>
+                    <th className="py-3.5 px-4 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60 text-slate-300' : 'divide-slate-150 text-slate-700'}`}>
+                  {paginatedTrailers.map(trailer => {
+                    const hasTruck = !!trailer.attached_truck_id;
+                    return (
+                      <tr 
+                        id={`trailer_row_${trailer.trailer_id}`}
+                        key={trailer.id} 
+                        className={`transition-colors ${isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/80'}`}
+                      >
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono font-extrabold text-blue-500 text-sm">{trailer.trailer_id}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-700 dark:text-slate-300">
+                          {trailer.license_plate}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-600 dark:text-slate-400">
+                          {trailer.model || '—'}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`text-[9.5px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                            trailer.status === 'ACTIVE'
+                              ? 'bg-emerald-500/15 border-emerald-500/20 text-emerald-400'
+                              : trailer.status === 'SPARE'
+                                ? 'bg-blue-500/15 border-blue-500/20 text-blue-400'
+                                : trailer.status === 'MAINTENANCE'
+                                  ? 'bg-amber-500/15 border-amber-500/20 text-amber-400'
+                                  : 'bg-slate-500/10 border-slate-400/20 text-slate-450'
+                          }`}>
+                            {trailer.status === 'ACTIVE' ? 'Đang kéo' : trailer.status === 'SPARE' ? 'Dự phòng' : trailer.status === 'MAINTENANCE' ? 'Đang sửa' : 'Ngưng'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {hasTruck ? (
+                            <span className="font-mono font-extrabold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md">
+                              {trailer.attached_truck_id}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Đang ở bãi</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5 select-none">
+                            <button
+                              id={`btn_trailer_diagram_list_${trailer.trailer_id}`}
+                              type="button"
+                              onClick={() => openTireDiagram(trailer.trailer_id, 'TRAILER')}
+                              className="py-1 px-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-650 dark:text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/40 text-xs font-black rounded-lg cursor-pointer flex items-center gap-1 transition-all"
+                              title="Xem sơ đồ vị trí lốp"
+                            >
+                              <Compass className="w-3.5 h-3.5" /> <span>Sơ đồ</span>
+                            </button>
+
+                            <button
+                              id={`btn_trailer_repair_list_${trailer.trailer_id}`}
+                              type="button"
+                              onClick={() => openRepairLogsDrawer(trailer.trailer_id, 'TRAILER')}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                                  ? 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 border-slate-350 text-slate-705'
+                              }`}
+                              title="Nhật ký Sửa chữa (Cờ lê)"
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              id={`btn_trailer_edit_list_${trailer.trailer_id}`}
+                              type="button"
+                              onClick={() => openTrailerForm(trailer)}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                                  ? 'bg-slate-950 border-slate-800 text-slate-455 hover:text-white'
+                                  : 'bg-indigo-50 hover:bg-indigo-150 border-indigo-250 text-indigo-755'
+                              }`}
+                              title="Sửa thông tin"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              id={`btn_trailer_delete_list_${trailer.trailer_id}`}
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Bạn chắc chắn muốn xóa rơ moóc ${trailer.trailer_id} khỏi bãi?`)) {
+                                  onDeleteTrailer(trailer.id);
+                                }
+                              }}
+                              className={`p-1.5 rounded-lg border cursor-pointer flex items-center justify-center transition-all ${
+                                isDarkMode
+                                  ? 'bg-slate-950 border-slate-800 hover:bg-red-955/20 text-slate-500 hover:text-red-400'
+                                  : 'bg-rose-50 hover:bg-rose-150 border-rose-250 text-rose-705'
+                              }`}
+                              title="Xoá moóc"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pagination Bar */}
+      {currentTotal > 0 && (
+        <div id="veh_pagination_row" className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t ${
+          isDarkMode ? 'border-slate-800/80 text-slate-400' : 'border-slate-200 text-slate-600'
+        } text-xs select-none`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span>
+              {language === 'vi' 
+                ? `Hiển thị ${startIndex + 1} - ${endIndex} trên tổng số ${currentTotal} ${activeTab === 'trucks' ? 'xe đầu kéo' : 'rơ moóc'}`
+                : `Showing ${startIndex + 1} - ${endIndex} of ${currentTotal} ${activeTab === 'trucks' ? 'trucks' : 'trailers'}`
+              }
+            </span>
+            <span className="text-slate-500">|</span>
+            <div className="flex items-center gap-1.5">
+              <span>{language === 'vi' ? 'Số lượng / trang:' : 'Per page:'}</span>
+              <select
+                id="veh_page_size_select"
+                value={pageSize}
+                onChange={e => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className={`px-2 py-1 rounded-lg border text-xs font-bold outline-none cursor-pointer ${
+                  isDarkMode ? 'bg-slate-900 border-slate-700 text-slate-200 focus:border-indigo-500' : 'bg-white border-slate-300 text-slate-800 focus:border-indigo-500'
+                }`}
+              >
+                <option value={6}>6</option>
+                <option value={9}>9</option>
+                <option value={12}>12</option>
+                <option value={24}>24</option>
+                <option value={48}>48</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                id="veh_page_first_btn"
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safePage === 1}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  safePage === 1
+                    ? 'opacity-30 cursor-not-allowed border-transparent'
+                    : isDarkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Trang đầu"
+              >
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                id="veh_page_prev_btn"
+                type="button"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  safePage === 1
+                    ? 'opacity-30 cursor-not-allowed border-transparent'
+                    : isDarkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Trang trước"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              {getPageNumbers().map((p, idx) => {
+                if (typeof p === 'string') {
+                  return <span key={`ellipsis-${idx}`} className="px-1 text-slate-500 font-mono">...</span>;
+                }
+                const isCurrent = safePage === p;
+                return (
+                  <button
+                    key={`page-${p}`}
+                    type="button"
+                    onClick={() => setCurrentPage(p)}
+                    className={`min-w-[30px] h-7 px-2 text-xs font-mono font-bold rounded-lg border transition-all cursor-pointer ${
+                      isCurrent
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                          : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+
+              <button
+                id="veh_page_next_btn"
+                type="button"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  safePage === totalPages
+                    ? 'opacity-30 cursor-not-allowed border-transparent'
+                    : isDarkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Trang sau"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                id="veh_page_last_btn"
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safePage === totalPages}
+                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                  safePage === totalPages
+                    ? 'opacity-30 cursor-not-allowed border-transparent'
+                    : isDarkMode ? 'bg-slate-900 border-slate-700 hover:bg-slate-800 text-slate-300' : 'bg-white border-slate-300 hover:bg-slate-100 text-slate-700'
+                }`}
+                title="Trang cuối"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Renders drawers / drawers sidebar based on drawerType */}
       {drawerType !== 'none' && (
@@ -1126,19 +1660,76 @@ export default function VehicleView({
               {/* Type 2: Gắn Rơ Moóc (Attach Trailer Slider Image 6) */}
               {drawerType === 'attach_trailer' && selectedAssetId && (
                 <div className="space-y-4">
-                  <p id="attach_instructions" className="text-xs text-slate-500 font-medium">Chọn trailer dự phòng để gắn vào <span className="text-blue-400 font-extrabold">{selectedAssetId}</span></p>
+                  <p id="attach_instructions" className="text-xs text-slate-500 font-medium">
+                    Chọn trailer dự phòng để gắn vào <span className="text-blue-400 font-extrabold">{selectedAssetId}</span>
+                  </p>
+
+                  {/* Search box for filtering spare trailers */}
+                  {spareTrailers.length > 0 && (
+                    <div className="relative">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        id="attach_trailer_search_box"
+                        type="text"
+                        value={attachSearchQuery}
+                        onChange={e => setAttachSearchQuery(e.target.value)}
+                        placeholder="Tìm nhanh theo mã moóc, biển số, kiểu mẫu..."
+                        className={`w-full pl-10 pr-9 py-2 text-xs rounded-xl outline-none border transition-all ${
+                          isDarkMode 
+                            ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10' 
+                            : 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10'
+                        }`}
+                      />
+                      {attachSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setAttachSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                          title="Xóa tìm kiếm"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {attachSearchQuery && spareTrailers.length > 0 && (
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                      <span>
+                        Tìm thấy <strong className="text-indigo-400 font-bold">{filteredSpareTrailers.length}</strong> / {spareTrailers.length} trailer dự phòng
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachSearchQuery('')}
+                        className="text-xs text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        Đặt lại
+                      </button>
+                    </div>
+                  )}
                   
                   {spareTrailers.length === 0 ? (
                     <div className="text-center py-20 text-xs text-slate-505 bg-slate-950/30 rounded-2xl border border-dashed border-slate-850">
                       Không còn rơ moóc nào đang rảnh trong bãi! Vui lòng Tháo moóc trước khi gắn mới.
                     </div>
+                  ) : filteredSpareTrailers.length === 0 ? (
+                    <div className="text-center py-12 px-4 text-xs text-slate-400 bg-slate-950/20 rounded-2xl border border-dashed border-slate-800 space-y-2">
+                      <p>Không tìm thấy rơ moóc dự phòng nào khớp với "{attachSearchQuery}"</p>
+                      <button
+                        type="button"
+                        onClick={() => setAttachSearchQuery('')}
+                        className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 rounded-lg text-xs font-bold cursor-pointer transition-all"
+                      >
+                        Xóa bộ lọc tìm kiếm
+                      </button>
+                    </div>
                   ) : (
                     <div className="space-y-3">
-                      {spareTrailers.map(trailer => (
+                      {filteredSpareTrailers.map(trailer => (
                         <div 
                           id={`spare_trailer_row_${trailer.trailer_id}`}
                           key={trailer.id}
-                          className="p-4 rounded-xl border border-slate-800 bg-slate-950/30 flex justify-between items-center transition-all hover:bg-slate-950"
+                          className="p-4 rounded-xl border border-slate-800 bg-slate-950/30 flex justify-between items-center transition-all hover:bg-slate-950 hover:border-slate-700"
                         >
                           <div>
                             <span className="text-sm font-extrabold text-slate-200 font-mono block">{trailer.trailer_id}</span>
@@ -1152,7 +1743,7 @@ export default function VehicleView({
                               setDrawerType('none');
                               alert(`Đã liên kết thành công rơ moóc ${trailer.trailer_id} vào xe đầu kéo ${selectedAssetId}.`);
                             }}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold font-sans cursor-pointer active:scale-98 transition-all"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold font-sans cursor-pointer active:scale-98 transition-all shadow-sm"
                           >
                             Gắn kèm
                           </button>
